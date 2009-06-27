@@ -36,7 +36,7 @@ my $format_presets = [
 "\%anime_name_english\% - \%episode\% - \%episode_name\% - [\%group_short\%](\%crc32\%).\%filetype\%",
 ];
 
-my $mylist      = 0;
+my $mylist        = 0;
 my $norename      = 0;
 my $noclean       = 0;
 my $strict        = 0;
@@ -63,7 +63,7 @@ my $config = retrieve($config_file)
   );
 
 my $result = GetOptions(
-    "mylist"  => \$mylist,
+    "mylist"    => \$mylist,
     "norename"  => \$norename,
     "noclean"   => \$noclean,
     "debug"     => \$debug,
@@ -236,7 +236,7 @@ foreach my $filepath (@files) {
             }
         }
     }
-    if ( $mylist ) {
+    if ($mylist) {
         $a->mylistadd( $fileinfo->{fid} );
     }
 }
@@ -255,7 +255,7 @@ Options:
 	--norename	Do not rename files. Just print the new names.
 	--mylist	Add hashed files to mylist.
 	--onlyhash	Only print ed2k hashes. 
-	--nocorrupt	tDon't rename "corrupt" files. (Files not found in AniDB)
+	--nocorrupt	Don't rename "corrupt" files. (Files not found in AniDB)
 	--logfile	Log files renamed to this file. Default: ~\/adbren.log
 			This log is used to avoid hashing files already processed.
 	--noskip	Do not skip files found in the log.
