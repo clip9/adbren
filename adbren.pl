@@ -30,26 +30,25 @@ use Data::Dumper;
 ### DEFAULTS ###
 
 my $format_presets = [
-	"\%anime_name_english\%_\%episode\%\%version\%-\%group_short\%.\%filetype\%",
-	"\%anime_name_english\%_\%episode\%\%version\%_\%episode_name\%-\%group_short\%.\%filetype\%",
-	"\%anime_name_english\%_\%episode\%\%version\%_\%episode_name\%-\%group_short\%(\%crc32\%).\%filetype\%",
-	"\%anime_name_english\% - \%episode\% - \%episode_name\% - [\%group_short\%](\%crc32\%).\%filetype\%",
+"\%anime_name_english\%_\%episode\%\%version\%-\%group_short\%.\%filetype\%",
+"\%anime_name_english\%_\%episode\%\%version\%_\%episode_name\%-\%group_short\%.\%filetype\%",
+"\%anime_name_english\%_\%episode\%\%version\%_\%episode_name\%-\%group_short\%(\%crc32\%).\%filetype\%",
+"\%anime_name_english\% - \%episode\% - \%episode_name\% - [\%group_short\%](\%crc32\%).\%filetype\%",
 ];
 
-my $nomylist  = 0;
-my $norename  = 0;
-my $noclean   = 0;
-my $strict    = 0;
-my $debug     = 0;
-my $nocorrupt = 0;
-my $nolog     = 0;
-my $noskip    = 0;
-my $onlyhash = 0;
+my $mylist      = 0;
+my $norename      = 0;
+my $noclean       = 0;
+my $strict        = 0;
+my $debug         = 0;
+my $nocorrupt     = 0;
+my $nolog         = 0;
+my $noskip        = 0;
+my $onlyhash      = 0;
 my $format_preset = 0;
-my $logfile   = File::Spec->join( File::HomeDir->my_data(), "adbren.log" );
+my $logfile = File::Spec->catfile( File::HomeDir->my_data(), "adbren.log" );
 
 my $format = undef;
-  "\%anime_name_english\%_\%episode\%\%version\%-\%group_short\%.\%filetype\%";
 
 my $config_file =
   File::Spec->catfile( File::HomeDir->my_data(), ".adbren.config" );
@@ -64,7 +63,7 @@ my $config = retrieve($config_file)
   );
 
 my $result = GetOptions(
-    "nomylist"  => \$nomylist,
+    "mylist"  => \$mylist,
     "norename"  => \$norename,
     "noclean"   => \$noclean,
     "debug"     => \$debug,
@@ -77,6 +76,10 @@ my $result = GetOptions(
     "noskip"    => \$noskip,
     "strict"    => \$strict,
 );
+
+if ( not defined $format ) {
+    $format = $format_presets->[$format_preset];
+}
 
 my @files;
 while ( ( my $file = shift ) ) {
@@ -128,10 +131,6 @@ sub CLEANUP {
     exit(1);
 }
 
-if ( not $a->login ) {
-    die("Not logged in!");
-}
-
 my $fileinfo;
 my $newname;
 
@@ -142,6 +141,7 @@ foreach my $filepath (@files) {
     }
     my $retry;
     my ( $volume, $directory, $filename ) = File::Spec->splitpath($filepath);
+    print "File: $volume $directory, $filename" if $debug;
     if ( not $noskip and -f $logfile ) {
         open my $log, "<", $logfile;
         $/ = 1;
@@ -159,7 +159,7 @@ foreach my $filepath (@files) {
         if ( not $nocorrupt ) {
             move(
                 $filepath,
-                File::Spec->join(
+                File::Spec->catpath(
                     $volume, $directory, '_corrupt_' . $filename
                 )
             );
@@ -171,9 +171,9 @@ foreach my $filepath (@files) {
     if (   not defined $fileinfo->{'anime_name_english'}
         or not defined $fileinfo->{'anime_name_romaji'} )
     {
-	
+
         warn "Sanitycheck failed. Corrupt data from server?" if $retry <= 3;
-        die "Sanitycheck failed. Corrupt data from server?" if $retry > 3;
+        die "Sanitycheck failed. Corrupt data from server?"  if $retry > 3;
         $retry++;
         goto RETRY;
     }
@@ -188,14 +188,16 @@ foreach my $filepath (@files) {
     while ( $newname =~ /\%([^\%]+)\%/ ) {
         my $key = $1;
         if ( defined $fileinfo->{$key} ) {
+            $fileinfo->{$key} = substr $fileinfo->{$key}, 0, 180;
             if ( !$noclean ) {
-		if ($strict) {
-                	$fileinfo->{$key} =~ s/[^a-zA-Z0-9-]/_/g;
-                	$fileinfo->{$key} =~ s/[_]+/_/g;
-		} 
-		else {
-			
-		}
+                $fileinfo->{$key} =~ s/[?:%\/]//g;
+                if ($strict) {
+                    $fileinfo->{$key} =~ s/[^a-zA-Z0-9-]/_/g;
+                }
+                else {
+                    $fileinfo->{$key} =~ s/[^a-zA-Z0-9-&!`',.~ ]/_/g;
+                }
+                $fileinfo->{$key} =~ s/[_]+/_/g;
             }
             $newname =~ s/\%$key\%/$fileinfo->{$key}/;
         }
@@ -206,7 +208,7 @@ foreach my $filepath (@files) {
     $newname =~ s/[_]+/_/g;
     $newname =~ s/_\./\./g;
     $newname =~ s/_-\./-/g;
-    my $newpath = File::Spec->join( $volume, $directory, $newname );
+    my $newpath = File::Spec->catpath( $volume, $directory, $newname );
     print $filepath. ": Renamed to " . $newpath . "\n";
     if ($norename) {
     }
@@ -224,7 +226,7 @@ foreach my $filepath (@files) {
 
             print "Directory: $newdirectory\n" if $debug == 1;
 
-            mkpath( File::Spec->join( $volume, $newdirectory ) );
+            mkpath( File::Spec->catpath( $volume, $newdirectory, "" ) );
             move( $filepath, $newpath )
               or print( $filename. ": Rename: " . $! . "\n" );
             if ( not $nolog ) {
@@ -234,7 +236,7 @@ foreach my $filepath (@files) {
             }
         }
     }
-    if ( !$nomylist ) {
+    if ( $mylist ) {
         $a->mylistadd( $fileinfo->{fid} );
     }
 }
@@ -247,11 +249,11 @@ adbren.pl [options] <file1\/dir1> [file2\/dir2] ...
 Options:
 	--format	Format. Default is preset 0
 	--preset	Format preset number. See list below;
-	--noclean	Do not clean values of format vars. 
-           		(Don't remove spaces, etc.)
 	--strict	Use stricter cleaning. Only allow [a-Z0-9._]
+	--noclean	Do not clean values of format vars. 
+           		(Don't remove spaces, etc.7)
 	--norename	Do not rename files. Just print the new names.
-	--nomylist	Do not Add hashed files to mylist.
+	--mylist	Add hashed files to mylist.
 	--onlyhash	Only print ed2k hashes. 
 	--nocorrupt	tDon't rename "corrupt" files. (Files not found in AniDB)
 	--logfile	Log files renamed to this file. Default: ~\/adbren.log
@@ -278,12 +280,12 @@ Directories on the command line are scanned recursivly. Files are renamed in the
 Preset List:
 EOF
 
-my $i = 0;
-foreach my $f (@{$format_presets}) {
-	print "$i: $f\n";
+    my $i = 0;
+    foreach my $f ( @{$format_presets} ) {
+        print "$i: $f\n";
 
-	$i++;
-}
+        $i++;
+    }
 
     exit;
 }
@@ -294,14 +296,16 @@ sub configure {
     print "Configuration is stored in $config_file\n";
     print "Type your AniDB username followed by return:\n";
     my %hash;
-    $hash{username} = <>;
+    $hash{username} = <STDIN>;
+    chomp( $hash{username} );
     print "Type your AniDB password followed by return:\n";
-    $hash{password} = <>;
+    $hash{password} = <STDIN>;
+    chomp( $hash{password} );
     store \%hash, $config_file
       or die "There was a problem storing the configuration: $!";
     print
 "Your adbren configuration is now stored in: $config_file. You can delete this file to rerun this configuration.\n";
-      return;
+    return;
 }
 
 package AniDB::UDPClient;
@@ -315,8 +319,7 @@ use File::HomeDir ();
 use Data::Dumper;
 use Storable;
 
-#Increase this 5 seconds util it reaches 30. The api is pretty retarded. I know.
-my $delay = 5;
+my $default_delay = 30;
 
 #acodes:
 use constant GROUP_NAME          => 0x00000001;
@@ -480,8 +483,8 @@ sub anime {
 
 sub file {
     my ( $self, $file ) = @_;
-    my $msg = "FILE s=" . $self->{skey} . "";
     my $ed2k;
+    my $msg = "FILE ";
     if ( -e $file ) {
         print $file. ": Hashing\n";
         $ed2k = ed2k_hash($file);
@@ -491,10 +494,10 @@ sub file {
         {
             return $self->{db}->{$ed2k};
         }
-        $msg .= "&size=" . $size . "&ed2k=" . $ed2k . "";
+        $msg .= "s=" . $self->{skey} . "&size=" . $size . "&ed2k=" . $ed2k . "";
     }
     else {
-        $msg .= "&fid=" . $file;
+        $msg .= "s=" . $self->{skey} . "&fid=" . $file;
     }
 
     # the reason i'm not using -1 is that the api might change to include other
@@ -512,7 +515,7 @@ sub file {
       DESCRIPTION;
     $msg .= "&acode=" . ($acode) . "&fcode=" . ($fcode) . "\n";
     print $file. ": Getting info.\n";
-    $msg = $self->_sendrecv($msg);
+    $msg = $self->_sendrecv( $msg, 1 );
     $msg =~ s/.*\n//im;
     my @f = split /\|/, $msg;
     my %fileinfo;
@@ -560,7 +563,7 @@ sub mylistadd {
     else {
         $msg .= "&fid=" . $file;
     }
-    $msg = $self->_sendrecv($msg);
+    $msg = $self->_sendrecv( $msg, 1 );
     if ( $msg =~ /^2.*/ ) {
         print $file. ": Added to mylist.\n";
     }
@@ -585,7 +588,7 @@ sub login {
           . $self->{clientver};
         $msg .= "&nat=1";
         $msg .= "\n";
-        $msg = $self->_sendrecv($msg);
+        $msg = $self->_sendrecv( $msg, 0 );
         if ( defined $msg
             && $msg =~ /20[0|1]\ ([a-zA-Z0-9]*)\ ([0-9\.\:]).*/ )
         {
@@ -605,7 +608,7 @@ sub logout {
     my ($self) = @_;
     if ( $self->{skey} ) {
         my $msg = "LOGOUT s=" . $self->{skey} . "\n";
-        return $self->_sendrecv( $msg, 1 );
+        return $self->_sendrecv( $msg, 0 );
     }
     else {
         return 0;
@@ -627,16 +630,15 @@ sub ping {
 
 # Sends and reads the reply. Tries up to 5 times.
 sub _sendrecv {
-    my ( $self, $msg, $nodelay ) = @_;
+    my ( $self, $msg, $delay ) = @_;
     my $stat = 0;
-    while ( not defined $nodelay
-        and ( time - $self->{last_command} ) < $self->{delay} )
-    {
-        $stat = $self->{delay} - ( time - $self->{last_command} );
+    $delay = $default_delay if not defined $delay;
+    while ( defined $delay and int( time - $self->{last_command} ) < $delay ) {
+        $stat = $delay - ( time - $self->{last_command} );
         sleep($stat);
         debug "Delay: $stat\n";
     }
-    $self->{delay} += 5 if $self->{delay} < 30;
+
     if ( $msg =~ /\n$/ ) {
     }
     else {
@@ -730,6 +732,3 @@ sub ed2k_hash {
     $ctx2->add( $ctx->digest );
     return $ctx2->hexdigest;
 }
-
-## Please see file perltidy.ERR
-## Please see file perltidy.ERR
