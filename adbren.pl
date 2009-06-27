@@ -28,6 +28,7 @@ use Storable;
 use Data::Dumper;
 
 ### DEFAULTS ###
+
 my $nomylist  = 0;
 my $norename  = 0;
 my $noclean   = 0;
@@ -36,12 +37,11 @@ my $debug     = 0;
 my $nocorrupt = 0;
 my $nolog     = 0;
 my $noskip    = 0;
+my $onlyhash = 0;
 my $logfile   = File::Spec->join( File::HomeDir->my_data(), "adbren.log" );
 
 my $format =
   "\%anime_name_english\%_\%episode\%\%version\%-\%group_short\%.\%filetype\%";
-
-my $onlyhash = 0;
 
 my $config_file =
   File::Spec->catfile( File::HomeDir->my_data(), ".adbren.config" );
@@ -66,6 +66,7 @@ my $result = GetOptions(
     "logfile=s" => \$logfile,
     "nolog"     => \$nolog,
     "noskip"    => \$noskip,
+    "strict"    => \$strict,
 );
 
 my @files;
@@ -238,6 +239,7 @@ Options:
 	--onlyhash	Only print ed2k hashes. 
 	--nocorrupt	tDon't rename "corrupt" files. (Files not found in AniDB)
 	--logfile	Log files renamed to this file. Default: ~\/adbren.log
+			This log is used to avoid hashing files already processed.
 	--noskip	Do not skip files found in the log.
 	--nolog		Do not do any logging.
 	--debug		Debug mode.
@@ -255,7 +257,7 @@ Format vars:
 	\%orginal_name\%
 
 Note:
-Directories are scanned recursivly. Files are renamed in the same directory.
+Directories on the command line are scanned recursivly. Files are renamed in the same directory.
 
 EOF
     exit;
