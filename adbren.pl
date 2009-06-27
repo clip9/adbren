@@ -14,37 +14,24 @@
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 # AniDB Renamer.
-
-#Remember to change the configuration below.
-#################
-# Configuration #
-#################
-
-use constant USERNAME => 'username';
-use constant PASSWORD => 'password';
-
-# Comment out the line below when you have changed the username password.
-die("You need to change the username password in the file");
-
-#####################
-# Configuration End #
-#####################
+# Developers:
+# You can use the AniDB::UDPClient in your own scripts. Just split it out in a seperate file.
 
 use strict;
 use warnings;
 use File::Copy;
 use File::Path;
 use File::Find;
+use File::HomeDir;
 use Getopt::Long;
-
+use Storable;
 use Data::Dumper;
 
-# Developers:
-# You can use the AniDB::UDPClient in your own scripts. Just split it out in a seperate file.
-
+### DEFAULTS ###
 my $nomylist  = 0;
 my $norename  = 0;
 my $noclean   = 0;
+my $strict    = 0;
 my $debug     = 0;
 my $nocorrupt = 0;
 my $nolog     = 0;
@@ -55,6 +42,18 @@ my $format =
   "\%anime_name_english\%_\%episode\%\%version\%-\%group_short\%.\%filetype\%";
 
 my $onlyhash = 0;
+
+my $config_file =
+  File::Spec->catfile( File::HomeDir->my_data(), ".adbren.config" );
+
+if ( not -f $config_file ) {
+    configure($config_file);
+}
+
+my $config = retrieve($config_file)
+  or die(
+"There was a problem loading your configuration from $config_file, please delete it. ($!)"
+  );
 
 my $result = GetOptions(
     "nomylist"  => \$nomylist,
@@ -102,8 +101,8 @@ if ($onlyhash) {
 }
 
 my $a = AniDB::UDPClient->new(
-    username  => USERNAME,
-    password  => PASSWORD,
+    username  => $config->{username},
+    password  => $config->{password},
     client    => "adbren",
     clientver => "5",
     debug     => $debug,
@@ -225,20 +224,23 @@ foreach my $filepath (@files) {
 $a->logout();
 
 sub print_help {
-    print qq/adbren.pl [options] <file1\/dir1> [file2\/dir2] ...
-	Options:
+    print <<EOF;
+adbren.pl [options] <file1\/dir1> [file2\/dir2] ...
+
+Options:
 	--format\tFormat. Default: 
 	   \%anime_name_english\%_\%episode\%\%version\%-\%group_short\%.\%filetype\%
-	--noclean\tDo not clean values of format vars. 
-           (Don't remove spaces, etc.)
-	--norename\tDo not rename files. Just print the new names.
-	--nomylist\tDo not Add hashed files to mylist.
-	--onlyhash\tOnly print ed2k hashes. 
-	--debug\t\tDebug mode.
-	--nocorrupt\tDon't rename "corrupt" files. (Files not found in AniDB)
-	--logfile\tLog files renamed files. Default: ~\/adbren.log
-	--noskip\t\tSkip files found in the log.
-	--nolog\t\tDo not do any logging.
+	--noclean	Do not clean values of format vars. 
+           		(Don't remove spaces, etc.)
+	--strict	Use stricter cleaning. Only allow [a-Z0-9._]
+	--norename	Do not rename files. Just print the new names.
+	--nomylist	Do not Add hashed files to mylist.
+	--onlyhash	Only print ed2k hashes. 
+	--nocorrupt	tDon't rename "corrupt" files. (Files not found in AniDB)
+	--logfile	Log files renamed to this file. Default: ~\/adbren.log
+	--noskip	Do not skip files found in the log.
+	--nolog		Do not do any logging.
+	--debug		Debug mode.
 
 Format vars:
 	\%fid\%, \%aid\%, \%eid\%, \%gid\%, \%lid\%, \%status\%, \%size\%, \%ed2k\%, 
@@ -252,9 +254,27 @@ Format vars:
 	\%anime_synonyms\%, \%anime_category\%, \%version\%, \%censored\%,
 	\%orginal_name\%
 
+Note:
 Directories are scanned recursivly. Files are renamed in the same directory.
-Remember to edit this file to change anidb username and password.\n/;
+
+EOF
     exit;
+}
+
+sub configure {
+    my ($config_file) = @_;
+    print "Configuration file not found. Running first time configuration.\n";
+    print "Configuration is stored in $config_file\n";
+    print "Type your AniDB username followed by return:\n";
+    my %hash;
+    $hash{username} = <>;
+    print "Type your AniDB password followed by return:\n";
+    $hash{password} = <>;
+    store \%hash, $config_file
+      or die "There was a problem storing the configuration: $!";
+    print
+"Your adbren configuration is now stored in: $config_file. You can delete this file to rerun this configuration.\n";
+      return;
 }
 
 package AniDB::UDPClient;
@@ -476,8 +496,10 @@ sub file {
         }
         $fileinfo{anime_name_short} =~ s/'/,/g;
         $fileinfo{anime_synonyms}   =~ s/'/,/g;
-        $fileinfo{censored} = "cen" if ( $fileinfo{status_code} & STATUS_CEN );
-        $fileinfo{censored} = "unc" if ( $fileinfo{status_code} & STATUS_UNC );
+        $fileinfo{censored} = "cen"
+          if ( $fileinfo{status_code} & STATUS_CEN );
+        $fileinfo{censored} = "unc"
+          if ( $fileinfo{status_code} & STATUS_UNC );
         if ( $fileinfo{status_code} & STATUS_ISV2 ) {
             $fileinfo{version} = "v2";
         }
@@ -537,7 +559,8 @@ sub login {
         $msg .= "&nat=1";
         $msg .= "\n";
         $msg = $self->_sendrecv($msg);
-        if ( defined $msg && $msg =~ /20[0|1]\ ([a-zA-Z0-9]*)\ ([0-9\.\:]).*/ )
+        if ( defined $msg
+            && $msg =~ /20[0|1]\ ([a-zA-Z0-9]*)\ ([0-9\.\:]).*/ )
         {
             $self->{skey}   = $1;
             $self->{myaddr} = $2;
@@ -592,7 +615,8 @@ sub _sendrecv {
     else {
         $msg .= "\n";
     }
-    send( $self->{handle}, $msg, 0, $self->{sockaddr} ) or die( "Send: " . $! );
+    send( $self->{handle}, $msg, 0, $self->{sockaddr} )
+      or die( "Send: " . $! );
     $self->{last_command} = time;
     debug "-->", $msg;
     my $recvmsg;
@@ -621,7 +645,8 @@ sub _sendrecv {
 
 sub _send {
     my ( $self, $msg ) = @_;
-    send( $self->{handle}, $msg, 0, $self->{sockaddr} ) or die( "Send: " . $! );
+    send( $self->{handle}, $msg, 0, $self->{sockaddr} )
+      or die( "Send: " . $! );
     debug "-->", $msg;
 }
 
@@ -679,3 +704,5 @@ sub ed2k_hash {
     return $ctx2->hexdigest;
 }
 
+## Please see file perltidy.ERR
+## Please see file perltidy.ERR
