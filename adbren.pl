@@ -29,6 +29,13 @@ use Data::Dumper;
 
 ### DEFAULTS ###
 
+my $format_presets = [
+	"\%anime_name_english\%_\%episode\%\%version\%-\%group_short\%.\%filetype\%",
+	"\%anime_name_english\%_\%episode\%\%version\%_\%episode_name\%-\%group_short\%.\%filetype\%",
+	"\%anime_name_english\%_\%episode\%\%version\%_\%episode_name\%-\%group_short\%(\%crc32\%).\%filetype\%",
+	"\%anime_name_english\% - \%episode\% - \%episode_name\% - [\%group_short\%](\%crc32\%).\%filetype\%",
+];
+
 my $nomylist  = 0;
 my $norename  = 0;
 my $noclean   = 0;
@@ -38,9 +45,10 @@ my $nocorrupt = 0;
 my $nolog     = 0;
 my $noskip    = 0;
 my $onlyhash = 0;
+my $format_preset = 0;
 my $logfile   = File::Spec->join( File::HomeDir->my_data(), "adbren.log" );
 
-my $format =
+my $format = undef;
   "\%anime_name_english\%_\%episode\%\%version\%-\%group_short\%.\%filetype\%";
 
 my $config_file =
@@ -61,6 +69,7 @@ my $result = GetOptions(
     "noclean"   => \$noclean,
     "debug"     => \$debug,
     "format=s"  => \$format,
+    "preset=i"  => \$format_preset,
     "onlyhash"  => \$onlyhash,
     "nocorrupt" => \$nocorrupt,
     "logfile=s" => \$logfile,
@@ -162,6 +171,8 @@ foreach my $filepath (@files) {
     if (   not defined $fileinfo->{'anime_name_english'}
         or not defined $fileinfo->{'anime_name_romaji'} )
     {
+	
+        warn "Sanitycheck failed. Corrupt data from server?" if $retry <= 3;
         die "Sanitycheck failed. Corrupt data from server?" if $retry > 3;
         $retry++;
         goto RETRY;
@@ -178,8 +189,13 @@ foreach my $filepath (@files) {
         my $key = $1;
         if ( defined $fileinfo->{$key} ) {
             if ( !$noclean ) {
-                $fileinfo->{$key} =~ s/[^a-zA-Z0-9-]/_/g;
-                $fileinfo->{$key} =~ s/[_]+/_/g;
+		if ($strict) {
+                	$fileinfo->{$key} =~ s/[^a-zA-Z0-9-]/_/g;
+                	$fileinfo->{$key} =~ s/[_]+/_/g;
+		} 
+		else {
+			
+		}
             }
             $newname =~ s/\%$key\%/$fileinfo->{$key}/;
         }
@@ -229,8 +245,8 @@ sub print_help {
 adbren.pl [options] <file1\/dir1> [file2\/dir2] ...
 
 Options:
-	--format\tFormat. Default: 
-	   \%anime_name_english\%_\%episode\%\%version\%-\%group_short\%.\%filetype\%
+	--format	Format. Default is preset 0
+	--preset	Format preset number. See list below;
 	--noclean	Do not clean values of format vars. 
            		(Don't remove spaces, etc.)
 	--strict	Use stricter cleaning. Only allow [a-Z0-9._]
@@ -259,7 +275,16 @@ Format vars:
 Note:
 Directories on the command line are scanned recursivly. Files are renamed in the same directory.
 
+Preset List:
 EOF
+
+my $i = 0;
+foreach my $f (@{$format_presets}) {
+	print "$i: $f\n";
+
+	$i++;
+}
+
     exit;
 }
 
