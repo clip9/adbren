@@ -156,7 +156,7 @@ foreach my $filepath (@files) {
     $fileinfo = $a->file($filepath);
     if ( !defined $fileinfo ) {
         print $filename. ": Not Found in AniDB\n";
-        if ( not $nocorrupt ) {
+        if ( not $nocorrupt and not $filename =~ m/^_corrupt_/xmsi ) {
             move(
                 $filepath,
                 File::Spec->catpath(
@@ -209,12 +209,13 @@ foreach my $filepath (@files) {
     $newname =~ s/_\./\./g;
     $newname =~ s/_-\./-/g;
     my $newpath;
-	if ($newname =~ m/^[\/\\]{1}/xmsi) {
-		$newpath = $newname;
-	}
-	else {
-		$newpath = File::Spec->catpath( $volume, $directory, $newname );
-	}
+    my ( $fvol, $fdir, $ffile ) = File::Spec->splitpath($newname);
+    if ( $fdir ne "" ) {
+        $newpath = $newname;
+    }
+    else {
+        $newpath = File::Spec->catpath( $volume, $directory, $newname );
+    }
     print $filepath. ": Renamed to " . $newpath . "\n";
     if ($norename) {
     }
@@ -458,7 +459,7 @@ sub new {
     defined $self->{clientver} or die "Clientver not defined!\n";
     $self->{state_file} =
       File::Spec->catfile( File::Spec->tmpdir(), "adbren_state.tmp" );
-	$self->{skey} = "XXXX";
+    $self->{skey} = "XXXX";
 
     return $self;
 }
