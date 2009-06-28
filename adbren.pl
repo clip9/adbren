@@ -175,6 +175,7 @@ foreach my $filepath (@files) {
         warn "Sanitycheck failed. Corrupt data from server?" if $retry <= 3;
         die "Sanitycheck failed. Corrupt data from server?"  if $retry > 3;
         $retry++;
+	sleep 5;
         goto RETRY;
     }
 
