@@ -175,7 +175,7 @@ foreach my $filepath (@files) {
         warn "Sanitycheck failed. Corrupt data from server?" if $retry <= 3;
         die "Sanitycheck failed. Corrupt data from server?"  if $retry > 3;
         $retry++;
-	sleep 5;
+        sleep 5;
         goto RETRY;
     }
 
@@ -533,6 +533,7 @@ sub file {
         for ( my $i = 0 ; $i < ( scalar @f ) ; $i++ ) {
             $fileinfo{ (FILE_ENUM)[$i] } = $f[$i];
         }
+        return $fileinfo if not defined $fileinfo{anime_name_short};
         $fileinfo{anime_name_short} =~ s/'/,/g;
         $fileinfo{anime_synonyms}   =~ s/'/,/g;
         $fileinfo{censored} = "cen"
@@ -676,6 +677,11 @@ sub _sendrecv {
         $self->login();
         $msg =~ s/s=$oldskey/s=$self->{skey}/;
         return $self->_sendrecv($msg);
+    }
+    if ( $recvmsg =~ /^555/ ) {
+        print
+"Banned. You should wait a few hours before retrying! Message:\n$recvmsg";
+        exit;
     }
     debug "<--", $recvmsg;
     return $recvmsg;
