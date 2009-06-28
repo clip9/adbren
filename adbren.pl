@@ -117,7 +117,7 @@ my $a = AniDB::UDPClient->new(
     username  => $config->{username},
     password  => $config->{password},
     client    => "adbren",
-    clientver => "5",
+    clientver => "6",
     debug     => $debug,
 );
 
@@ -208,7 +208,13 @@ foreach my $filepath (@files) {
     $newname =~ s/[_]+/_/g;
     $newname =~ s/_\./\./g;
     $newname =~ s/_-\./-/g;
-    my $newpath = File::Spec->catpath( $volume, $directory, $newname );
+    my $newpath;
+	if ($newname =~ m/^[\/\\]{1}/xmsi) {
+		$newpath = $newname;
+	}
+	else {
+		$newpath = File::Spec->catpath( $volume, $directory, $newname );
+	}
     print $filepath. ": Renamed to " . $newpath . "\n";
     if ($norename) {
     }
@@ -452,6 +458,7 @@ sub new {
     defined $self->{clientver} or die "Clientver not defined!\n";
     $self->{state_file} =
       File::Spec->catfile( File::Spec->tmpdir(), "adbren_state.tmp" );
+	$self->{skey} = "XXXX";
 
     return $self;
 }
