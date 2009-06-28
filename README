@@ -1,0 +1,4 @@
+TIPS
+
+You can use an absolute path in the format parameter like this:
+./adbren.pl --format /mnt/raid/%anime_name_english%/%episode%.%filetype%
