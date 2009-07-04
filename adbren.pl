@@ -14,8 +14,6 @@
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 # AniDB Renamer.
-# Developers:
-# You can use the AniDB::UDPClient in your own scripts. Just split it out in a seperate file.
 
 use strict;
 use warnings;
