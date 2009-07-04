@@ -46,6 +46,7 @@ my $nolog         = 0;
 my $noskip        = 0;
 my $onlyhash      = 0;
 my $format_preset = 0;
+my $ping          = 0;
 my $logfile = File::Spec->catfile( File::HomeDir->my_data(), "adbren.log" );
 
 my $format = undef;
@@ -75,10 +76,24 @@ my $result = GetOptions(
     "nolog"     => \$nolog,
     "noskip"    => \$noskip,
     "strict"    => \$strict,
+    "ping"      => \$ping,
 );
 
 if ( not defined $format ) {
     $format = $format_presets->[$format_preset];
+}
+
+my $a = AniDB::UDPClient->new(
+    username  => $config->{username},
+    password  => $config->{password},
+    client    => "adbren",
+    clientver => "6",
+    debug     => $debug,
+);
+
+if ($ping) {
+    print $a->ping(), "\n";
+    exit(1);
 }
 
 my @files;
@@ -112,14 +127,6 @@ if ($onlyhash) {
     }
     exit;
 }
-
-my $a = AniDB::UDPClient->new(
-    username  => $config->{username},
-    password  => $config->{password},
-    client    => "adbren",
-    clientver => "6",
-    debug     => $debug,
-);
 
 my $sent_logout = 0;
 $SIG{'INT'} = 'CLEANUP';
@@ -524,7 +531,7 @@ sub file {
     $parameters{acode} = $acode;
     $parameters{fcode} = $fcode;
     print $file. ": Getting info.\n";
-    my $msg = $self->_sendrecv( "ANIME", \%parameters, 1 );
+    my $msg = $self->_sendrecv( "FILE", \%parameters, 1 );
     $msg =~ s/.*\n//im;
     my @f = split /\|/, $msg;
     my %fileinfo;
@@ -627,9 +634,10 @@ sub notify {
 
 sub ping {
     my ($self) = @_;
-    $self->_sendrecv( "PING", {}, 0 );
+    return $self->_sendrecv( "PING", {}, 0 );
 }
 
+# Takes the command string and a hash ref with the parameters.
 # Sends and reads the reply. Tries up to 5 times.
 sub _sendrecv {
     my ( $self, $command, $parameter_ref, $delay ) = @_;
@@ -647,6 +655,7 @@ sub _sendrecv {
     foreach my $k ( keys %{$parameter_ref} ) {
         $msg_str .= $k . "=" . $parameter_ref->{$k} . "&";
     }
+    $msg_str =~ s/\&$//xmsi;
     $msg_str .= "\n";
 
     send( $self->{handle}, $msg_str, 0, $self->{sockaddr} )
@@ -667,15 +676,15 @@ sub _sendrecv {
           or die( "Send: " . $! );
     }
     debug "<--", $recvmsg;
-    if ( $recvmsg =~ m/adbr-[\d]+/xmsi ) {
+    if ( $recvmsg =~ m/(adbr-[\d]+)/xmsi ) {
         if ( $tag ne $1 ) {
             print
               "This is not the tag we are waiting for. Retrying ($tag!= $1)\n";
             goto RETRY;
         }
+        $recvmsg =~ s/adbr-[\d]+\ \d{3}\ //xmsi;
     }
     else {
-
         if ( $recvmsg =~ /^501.*|^506.*/ ) {
             debug "Invalid session. Reauthing.";
             undef $self->{skey};
@@ -697,6 +706,7 @@ sub _send {
     send( $self->{handle}, $msg, 0, $self->{sockaddr} )
       or die( "Send: " . $! );
     debug "-->", $msg;
+    sleep 1;
 }
 
 sub _recv {
