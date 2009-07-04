@@ -596,7 +596,7 @@ sub login {
     my %parameters;
     if ( not defined $self->{skey} ) {
         $parameters{user}      = $self->{username};
-        $parameters{password}  = $self->{username};
+        $parameters{password}  = $self->{password};
         $parameters{protover}  = 3;
         $parameters{client}    = $self->{client};
         $parameters{clientver} = $self->{client};
@@ -682,22 +682,21 @@ sub _sendrecv {
               "This is not the tag we are waiting for. Retrying ($tag!= $1)\n";
             goto RETRY;
         }
-        $recvmsg =~ s/adbr-[\d]+\ \d{3}\ //xmsi;
+        $recvmsg =~ s/adbr-[\d]+\ //xmsi;
     }
-    else {
-        if ( $recvmsg =~ /^501.*|^506.*/ ) {
-            debug "Invalid session. Reauthing.";
-            undef $self->{skey};
-            $self->login();
-            $parameter_ref->{skey} = $self->{skey};
-            return $self->_sendrecv( $command, $parameter_ref, $delay );
-        }
-        if ( $recvmsg =~ /^555/ ) {
-            print
+    if ( $recvmsg =~ /^501.*|^506.*/ ) {
+        debug "Invalid session. Reauthing.";
+        undef $self->{skey};
+        $self->login();
+        $parameter_ref->{skey} = $self->{skey};
+        return $self->_sendrecv( $command, $parameter_ref, $delay );
+    }
+    if ( $recvmsg =~ /^555/ ) {
+        print
 "Banned. You should wait a few hours before retrying! Message:\n$recvmsg";
-            exit;
-        }
+        exit;
     }
+    $recvmsg =~ s/\d{3}\ //xmsi;
     return $recvmsg;
 }
 
