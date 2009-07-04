@@ -641,13 +641,16 @@ sub ping {
 # Sends and reads the reply. Tries up to 5 times.
 sub _sendrecv {
     my ( $self, $msg, $delay ) = @_;
-    my $stat = 0;
+    $stat = 0;
+    my $tag = "adbr-".int(rand()*10000)+1;
     $delay = $default_delay if not defined $delay;
     while ( defined $delay and int( time - $self->{last_command} ) < $delay ) {
         $stat = $delay - ( time - $self->{last_command} );
         sleep($stat);
         debug "Delay: $stat\n";
     }
+     
+    
 
     if ( $msg =~ /\n$/ ) {
     }
