@@ -467,7 +467,6 @@ sub new {
     defined $self->{clientver} or die "Clientver not defined!\n";
     $self->{state_file} =
       File::Spec->catfile( File::Spec->tmpdir(), "adbren_state.tmp" );
-    $self->{skey} = "XXXX";
 
     return $self;
 }
@@ -596,10 +595,10 @@ sub login {
     my %parameters;
     if ( not defined $self->{skey} ) {
         $parameters{user}      = $self->{username};
-        $parameters{password}  = $self->{password};
+        $parameters{pass}      = $self->{password};
         $parameters{protover}  = 3;
         $parameters{client}    = $self->{client};
-        $parameters{clientver} = $self->{client};
+        $parameters{clientver} = $self->{clientver};
         $parameters{nat}       = 1;
         $msg = $self->_sendrecv( $msg, \%parameters, 0 );
         if ( defined $msg
@@ -641,6 +640,9 @@ sub ping {
 # Sends and reads the reply. Tries up to 5 times.
 sub _sendrecv {
     my ( $self, $command, $parameter_ref, $delay ) = @_;
+    if ( not defined $self->{skey} ) {
+        $self->login();
+    }
     my $stat = 0;
     my $tag = "adbr-" . ( int( rand() * 10000 ) + 1 );
     $parameter_ref->{tag} = $tag;
