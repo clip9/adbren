@@ -467,14 +467,14 @@ sub new {
 
 sub anime {
     my ( $self, $anime ) = @_;
-    my $msg = "ANIME s=" . $self->{skey};
+    my %parameters;
     if ( $anime =~ /\d+/ ) {
-        $msg .= "&aid=" . $anime . "\n";
+        $parameters{aid} = $anime;
     }
     else {
-        $msg .= "&aname=" . $anime . "\n";
+        $parameters{aname} = $anime;
     }
-    $msg = $self->_sendrecv($msg);
+    my $msg = $self->_sendrecv( "ANIME", \%parameters );
     $msg =~ s/.*\n//im;
     my @f = split /\|/, $msg;
     my %animeinfo;
@@ -492,21 +492,20 @@ sub anime {
 
 sub file {
     my ( $self, $file ) = @_;
-    my $ed2k;
-    my $msg = "FILE ";
+    my %parameters;
+    $parameters{skey} = $self->{skey};
     if ( -e $file ) {
         print $file. ": Hashing\n";
-        $ed2k = ed2k_hash($file);
+        $parameters{ed2k} = ed2k_hash($file);
         my $size = -s $file;
-        if (    defined $self->{db}->{$ed2k}
-            and defined $self->{db}->{$ed2k}->{fid} )
+        if (    defined $self->{db}->{ $parameters{ed2k} }
+            and defined $self->{db}->{ $parameters{ed2k} }->{fid} )
         {
-            return $self->{db}->{$ed2k};
+            return $self->{db}->{ $parameters{ed2k} };
         }
-        $msg .= "s=" . $self->{skey} . "&size=" . $size . "&ed2k=" . $ed2k . "";
     }
     else {
-        $msg .= "s=" . $self->{skey} . "&fid=" . $file;
+        $parameters{fid} = $file;
     }
 
     # the reason i'm not using -1 is that the api might change to include other
@@ -522,9 +521,10 @@ sub file {
       LANG_DUB | LANG_SUB | QUALITY | SOURCE | CODEC_AUDIO | BITRATE_AUDIO |
       CODEC_VIDEO | BITRATE_VIDEO | RESOLUTION | FILETYPE | LENGTH |
       DESCRIPTION;
-    $msg .= "&acode=" . ($acode) . "&fcode=" . ($fcode) . "\n";
+    $parameters{acode} = $acode;
+    $parameters{fcode} = $fcode;
     print $file. ": Getting info.\n";
-    $msg = $self->_sendrecv( $msg, 1 );
+    my $msg = $self->_sendrecv( "ANIME", \%parameters, 1 );
     $msg =~ s/.*\n//im;
     my @f = split /\|/, $msg;
     my %fileinfo;
@@ -552,9 +552,9 @@ sub file {
         elsif ( $fileinfo{status_code} & STATUS_ISV5 ) {
             $fileinfo{version} = "v5";
         }
-        $fileinfo{crcok}     = $fileinfo{status_code} & STATUS_CRCOK;
-        $fileinfo{crcerr}    = $fileinfo{status_code} & STATUS_CRCERR;
-        $self->{db}->{$ed2k} = \%fileinfo;
+        $fileinfo{crcok}  = $fileinfo{status_code} & STATUS_CRCOK;
+        $fileinfo{crcerr} = $fileinfo{status_code} & STATUS_CRCERR;
+        $self->{db}->{ $parameters{ed2k} } = \%fileinfo;
         store $self->{db}, $self->{dbpath} or die $!;
         return \%fileinfo;
     }
@@ -563,17 +563,17 @@ sub file {
 
 sub mylistadd {
     my ( $self, $file ) = @_;
-    my $msg = "MYLISTADD s=" . $self->{skey};
+    my %parameters;
+    $parameters{skey} = $self->{skey};
     if ( -e $file ) {
         print $file. ": Hashing.\n";
-        my $ed2k = ed2k_hash($file);
-        my $size = -s $file;
-        $msg .= "&size=" . $size . "&ed2k=" . $ed2k . "";
+        $parameters{ed2k} = ed2k_hash($file);
+        $parameters{size} = -s $file;
     }
     else {
-        $msg .= "&fid=" . $file;
+        $parameters{fid} = $file;
     }
-    $msg = $self->_sendrecv( $msg, 1 );
+    my $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
     if ( $msg =~ /^2.*/ ) {
         print $file. ": Added to mylist.\n";
     }
@@ -585,20 +585,16 @@ sub mylistadd {
 
 sub login {
     my ($self) = @_;
-    my $msg = "";
+    my $msg = "AUTH";
+    my %parameters;
     if ( not defined $self->{skey} ) {
-        $msg =
-            "AUTH user="
-          . $self->{username}
-          . "&pass="
-          . $self->{password}
-          . "&protover=3&client="
-          . $self->{client}
-          . "&clientver="
-          . $self->{clientver};
-        $msg .= "&nat=1";
-        $msg .= "\n";
-        $msg = $self->_sendrecv( $msg, 0 );
+        $parameters{user}      = $self->{username};
+        $parameters{password}  = $self->{username};
+        $parameters{protover}  = 3;
+        $parameters{client}    = $self->{client};
+        $parameters{clientver} = $self->{client};
+        $parameters{nat}       = 1;
+        $msg = $self->_sendrecv( $msg, \%parameters, 0 );
         if ( defined $msg
             && $msg =~ /20[0|1]\ ([a-zA-Z0-9]*)\ ([0-9\.\:]).*/ )
         {
@@ -617,8 +613,7 @@ sub login {
 sub logout {
     my ($self) = @_;
     if ( $self->{skey} ) {
-        my $msg = "LOGOUT s=" . $self->{skey} . "\n";
-        return $self->_sendrecv( $msg, 0 );
+        return $self->_send( "LOGOUT skey=" . $self->{skey} );
     }
     else {
         return 0;
@@ -627,66 +622,73 @@ sub logout {
 
 sub notify {
     my ($self) = @_;
-    my $msg;
-    $msg = "NOTIFY s=" . $self->{skey} . "\n";
-    $self->_send($msg);
-    return $self->_recv();
+    return $self->_sendrecv( "NOTIFY", { skey => $self->{skey} } );
 }
 
 sub ping {
     my ($self) = @_;
-    $self->_send("PING\n");
+    $self->_sendrecv( "PING", {}, 0 );
 }
 
 # Sends and reads the reply. Tries up to 5 times.
 sub _sendrecv {
-    my ( $self, $msg, $delay ) = @_;
-    $stat = 0;
-    my $tag = "adbr-".int(rand()*10000)+1;
+    my ( $self, $command, $parameter_ref, $delay ) = @_;
+    my $stat = 0;
+    my $tag = "adbr-" . ( int( rand() * 10000 ) + 1 );
+    $parameter_ref->{tag} = $tag;
     $delay = $default_delay if not defined $delay;
     while ( defined $delay and int( time - $self->{last_command} ) < $delay ) {
         $stat = $delay - ( time - $self->{last_command} );
         sleep($stat);
         debug "Delay: $stat\n";
     }
-     
-    
 
-    if ( $msg =~ /\n$/ ) {
+    my $msg_str = $command . " ";
+    foreach my $k ( keys %{$parameter_ref} ) {
+        $msg_str .= $k . "=" . $parameter_ref->{$k} . "&";
     }
-    else {
-        $msg .= "\n";
-    }
-    send( $self->{handle}, $msg, 0, $self->{sockaddr} )
+    $msg_str .= "\n";
+
+    send( $self->{handle}, $msg_str, 0, $self->{sockaddr} )
       or die( "Send: " . $! );
     $self->{last_command} = time;
-    debug "-->", $msg;
+    debug "-->", $msg_str;
     my $recvmsg;
     my $timer = 0;
+  RETRY:
     while ( !( $recvmsg = $self->_recv() ) ) {
         if ( $timer > 10 ) {
             print "Timeout while wating for reply.\n";
             return undef;
         }
         $timer++;
-        debug "-->", $msg;
-        send( $self->{handle}, $msg, 0, $self->{sockaddr} )
+        debug "-->", $msg_str;
+        send( $self->{handle}, $msg_str, 0, $self->{sockaddr} )
           or die( "Send: " . $! );
     }
-    if ( $recvmsg =~ /^501.*|^506.*/ ) {
-        debug "Invalid session. Reauthing.";
-        my $oldskey = $self->{skey};
-        undef $self->{skey};
-        $self->login();
-        $msg =~ s/s=$oldskey/s=$self->{skey}/;
-        return $self->_sendrecv($msg);
-    }
-    if ( $recvmsg =~ /^555/ ) {
-        print
-"Banned. You should wait a few hours before retrying! Message:\n$recvmsg";
-        exit;
-    }
     debug "<--", $recvmsg;
+    if ( $recvmsg =~ m/adbr-[\d]+/xmsi ) {
+        if ( $tag ne $1 ) {
+            print
+              "This is not the tag we are waiting for. Retrying ($tag!= $1)\n";
+            goto RETRY;
+        }
+    }
+    else {
+
+        if ( $recvmsg =~ /^501.*|^506.*/ ) {
+            debug "Invalid session. Reauthing.";
+            undef $self->{skey};
+            $self->login();
+            $parameter_ref->{skey} = $self->{skey};
+            return $self->_sendrecv( $command, $parameter_ref, $delay );
+        }
+        if ( $recvmsg =~ /^555/ ) {
+            print
+"Banned. You should wait a few hours before retrying! Message:\n$recvmsg";
+            exit;
+        }
+    }
     return $recvmsg;
 }
 
