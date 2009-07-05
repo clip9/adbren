@@ -502,7 +502,7 @@ sub file {
     if ( -e $file ) {
         print $file. ": Hashing\n";
         $parameters{ed2k} = ed2k_hash($file);
-        my $size = -s $file;
+        $parameters{size} = -s $file;
         if (    defined $self->{db}->{ $parameters{ed2k} }
             and defined $self->{db}->{ $parameters{ed2k} }->{fid} )
         {
