@@ -472,6 +472,7 @@ sub new {
 sub anime {
     my ( $self, $anime ) = @_;
     my %parameters;
+    $parameters{s} = $self->{skey};
     if ( $anime =~ /\d+/ ) {
         $parameters{aid} = $anime;
     }
@@ -497,7 +498,7 @@ sub anime {
 sub file {
     my ( $self, $file ) = @_;
     my %parameters;
-    $parameters{skey} = $self->{skey};
+    $parameters{s} = $self->{skey};
     if ( -e $file ) {
         print $file. ": Hashing\n";
         $parameters{ed2k} = ed2k_hash($file);
@@ -568,7 +569,7 @@ sub file {
 sub mylistadd {
     my ( $self, $file ) = @_;
     my %parameters;
-    $parameters{skey} = $self->{skey};
+    $parameters{s} = $self->{skey};
     if ( -e $file ) {
         print $file. ": Hashing.\n";
         $parameters{ed2k} = ed2k_hash($file);
@@ -640,7 +641,7 @@ sub _sendrecv {
     my ( $self, $command, $parameter_ref, $delay ) = @_;
     if ( not defined $self->{skey} and $command ne "AUTH") {
         $self->login();
-	$parameter_ref->{skey} = $self->{skey};
+	$parameter_ref->{s} = $self->{skey};
     }
     my $stat = 0;
     my $tag = "adbr-" . ( int( rand() * 10000 ) + 1 );
@@ -689,7 +690,7 @@ sub _sendrecv {
         debug "Invalid session. Reauthing.";
         undef $self->{skey};
         $self->login();
-        $parameter_ref->{skey} = $self->{skey};
+        $parameter_ref->{s} = $self->{skey};
         return $self->_sendrecv( $command, $parameter_ref, $delay );
     }
     if ( $recvmsg =~ /^555/ ) {
