@@ -638,8 +638,9 @@ sub ping {
 # Sends and reads the reply. Tries up to 5 times.
 sub _sendrecv {
     my ( $self, $command, $parameter_ref, $delay ) = @_;
-    if ( not defined $self->{skey} ) {
+    if ( not defined $self->{skey} and $command ne "AUTH") {
         $self->login();
+	$parameter_ref->{skey} = $self->{skey};
     }
     my $stat = 0;
     my $tag = "adbr-" . ( int( rand() * 10000 ) + 1 );
@@ -696,7 +697,7 @@ sub _sendrecv {
 "Banned. You should wait a few hours before retrying! Message:\n$recvmsg";
         exit;
     }
-    $recvmsg =~ s/\d{3}\ //xmsi;
+    #$recvmsg =~ s/\d{3}\ //xmsi;
     return $recvmsg;
 }
 
