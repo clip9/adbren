@@ -215,6 +215,8 @@ foreach my $filepath (@files) {
     $newname =~ s/[_]+/_/g;
     $newname =~ s/_\./\./g;
     $newname =~ s/_-\./-/g;
+    $newname =~ s/_\ /\ /g;
+    $newname =~ s/\ _/\ /g;
     my $newpath;
     my ( $fvol, $fdir, $ffile ) = File::Spec->splitpath($newname);
     if ( $fdir ne "" ) {
