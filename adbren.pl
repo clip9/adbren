@@ -32,6 +32,7 @@ my $format_presets = [
 "\%anime_name_english\%_\%episode\%\%version\%_\%episode_name\%-\%group_short\%.\%filetype\%",
 "\%anime_name_english\%_\%episode\%\%version\%_\%episode_name\%-\%group_short\%(\%crc32\%).\%filetype\%",
 "\%anime_name_english\% - \%episode\% - \%episode_name\% - [\%group_short\%](\%crc32\%).\%filetype\%",
+"[\%group_short\%] \%anime_name_english\% - \%episode\% - \%episode_name\% (\%crc32\%).\%filetype\%",
 ];
 
 my $mylist        = 0;
@@ -201,7 +202,7 @@ foreach my $filepath (@files) {
                     $fileinfo->{$key} =~ s/[^a-zA-Z0-9-]/_/g;
                 }
                 else {
-                    $fileinfo->{$key} =~ s/[^a-zA-Z0-9-&!`',.~ ]/_/g;
+                    $fileinfo->{$key} =~ s/[^a-zA-Z0-9-&!`',.~+\- ]/_/g;
                 }
                 $fileinfo->{$key} =~ s/[_]+/_/g;
             }
@@ -263,8 +264,8 @@ Options:
 	--format	Format. Default is preset 0
 	--preset	Format preset number. See list below;
 	--strict	Use stricter cleaning. Only allow [a-Z0-9._]
-	--noclean	Do not clean values of format vars. 
-           		(Don't remove spaces, etc.7)
+	--noclean	Do not clean values from API for format vars. 
+           		(Don't remove special characters)
 	--norename	Do not rename files. Just print the new names.
 	--mylist	Add hashed files to mylist.
 	--onlyhash	Only print ed2k hashes. 
@@ -431,25 +432,9 @@ sub new {
         *debug = sub { };
     }
 
-    $self->{dbpath} = File::HomeDir->my_data() . "/.adbren.db";
-
-    debug "Using cache: ", $self->{dbpath};
-    if ( -e $self->{dbpath} ) {
-        $self->{db} = retrieve( $self->{dbpath} ) or die $!;
-    }
-    else {
-        $self->{db} = {};
-    }
-    foreach my $key ( keys %{ $self->{db} } ) {
-        if (   not defined $self->{db}->{$key}->{fid}
-            or not defined $self->{db}->{$key}->{anime_name_short} )
-        {
-            delete $self->{db}->{$key};
-        }
-        elsif ( not $self->{db}->{$key}->{fid} =~ m/^\d+$/ ) {
-            delete $self->{db}->{$key};
-        }
-    }
+    $self->{dbpath}     = File::HomeDir->my_data() . "/.adbren.db";
+    $self->{dbpath_tmp} = File::HomeDir->my_data() . "/.adbren.db.tmp";
+    $self->load_cache();
     $self->{delay}    = 0;
     $self->{hostname} = "api.anidb.info";
     $self->{port}     = 9000;
@@ -541,10 +526,13 @@ sub file {
         return $fileinfo if not defined $fileinfo{anime_name_short};
         $fileinfo{anime_name_short} =~ s/'/,/g;
         $fileinfo{anime_synonyms}   =~ s/'/,/g;
+        $fileinfo{lang_sub}         =~ s/'/,/g;
+        $fileinfo{lang_dub}         =~ s/'/,/g;
         $fileinfo{censored} = "cen"
           if ( $fileinfo{status_code} & STATUS_CEN );
         $fileinfo{censored} = "unc"
           if ( $fileinfo{status_code} & STATUS_UNC );
+
         if ( $fileinfo{status_code} & STATUS_ISV2 ) {
             $fileinfo{version} = "v2";
         }
@@ -560,10 +548,41 @@ sub file {
         $fileinfo{crcok}  = $fileinfo{status_code} & STATUS_CRCOK;
         $fileinfo{crcerr} = $fileinfo{status_code} & STATUS_CRCERR;
         $self->{db}->{ $parameters{ed2k} } = \%fileinfo;
-        store $self->{db}, $self->{dbpath} or die $!;
+        $self->save_cache();
         return \%fileinfo;
     }
     return undef;
+}
+
+sub load_cache {
+    my ($self) = @_;
+    return if not defined $self->{dbpath};
+    if ( -e $self->{dbpath} ) {
+        $self->{db} = retrieve( $self->{dbpath} ) or die $!;
+        debug "Using cache: ", $self->{dbpath};
+    }
+    else {
+        debug "Creating cache: ", $self->{dbpath};
+        $self->{db} = {};
+    }
+    foreach my $key ( keys %{ $self->{db} } ) {
+	next if $key eq 'session';
+        if (   not defined $self->{db}->{$key}->{fid}
+            or not defined $self->{db}->{$key}->{anime_name_short} )
+        {
+            delete $self->{db}->{$key};
+        }
+        elsif ( not $self->{db}->{$key}->{fid} =~ m/^\d+$/ ) {
+            delete $self->{db}->{$key};
+        }
+    }
+}
+
+sub save_cache {
+    my ($self) = @_;
+    debug "Saving Cache.";
+    store $self->{db}, $self->{dbpath_tmp} or die $!;
+    rename $self->{dbpath_tmp}, $self->{dbpath} or die $!;
 }
 
 sub mylistadd {
@@ -592,26 +611,24 @@ sub login {
     my ($self) = @_;
     my $msg = "AUTH";
     my %parameters;
-    if ( not defined $self->{skey} ) {
-        $parameters{user}      = $self->{username};
-        $parameters{pass}      = $self->{password};
-        $parameters{protover}  = 3;
-        $parameters{client}    = $self->{client};
-        $parameters{clientver} = $self->{clientver};
-        $parameters{nat}       = 1;
-        $msg = $self->_sendrecv( $msg, \%parameters, 0 );
-        if ( defined $msg
-            && $msg =~ /20[0|1]\ ([a-zA-Z0-9]*)\ ([0-9\.\:]).*/ )
-        {
-            $self->{skey}   = $1;
-            $self->{myaddr} = $2;
-        }
-        else {
-            die "Login Failed: $msg\n";
-        }
-        return 1;
-    }
+     
+    $parameters{user}      = $self->{username};
+    $parameters{pass}      = $self->{password};
+    $parameters{protover}  = 3;
+    $parameters{client}    = $self->{client};
+    $parameters{clientver} = $self->{clientver};
+    $parameters{nat}       = 1;
+    $msg = $self->_sendrecv( $msg, \%parameters, 0 );
 
+    if ( defined $msg
+        && $msg =~ /20[0|1]\ ([a-zA-Z0-9]*)\ ([0-9\.\:]).*/ )
+    {
+        $self->{skey}                = $1;
+        $self->{myaddr}              = $2;
+    }
+    else {
+        die "Login Failed: $msg\n";
+    }
     return 1;
 }
 
@@ -639,9 +656,9 @@ sub ping {
 # Sends and reads the reply. Tries up to 5 times.
 sub _sendrecv {
     my ( $self, $command, $parameter_ref, $delay ) = @_;
-    if ( not defined $self->{skey} and $command ne "AUTH") {
+    if ( not defined $self->{skey} and $command ne "AUTH" and $command ne "PING" ) {
         $self->login();
-	$parameter_ref->{s} = $self->{skey};
+        $parameter_ref->{s} = $self->{skey};
     }
     my $stat = 0;
     my $tag = "adbr-" . ( int( rand() * 10000 ) + 1 );
@@ -673,7 +690,7 @@ sub _sendrecv {
             return undef;
         }
         $timer++;
-        debug "-->", $msg_str;
+
         send( $self->{handle}, $msg_str, 0, $self->{sockaddr} )
           or die( "Send: " . $! );
     }
@@ -688,7 +705,7 @@ sub _sendrecv {
     }
     if ( $recvmsg =~ /^501.*|^506.*/ ) {
         debug "Invalid session. Reauthing.";
-        undef $self->{skey};
+        delete $self->{skey};
         $self->login();
         $parameter_ref->{s} = $self->{skey};
         return $self->_sendrecv( $command, $parameter_ref, $delay );
@@ -698,7 +715,7 @@ sub _sendrecv {
 "Banned. You should wait a few hours before retrying! Message:\n$recvmsg";
         exit;
     }
-    #$recvmsg =~ s/\d{3}\ //xmsi;
+
     return $recvmsg;
 }
 
