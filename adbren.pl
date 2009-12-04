@@ -219,6 +219,7 @@ foreach my $filepath (@files) {
     $newname =~ s/\ _/\ /g;
     my $newpath;
     my ( $fvol, $fdir, $ffile ) = File::Spec->splitpath($newname);
+
     if ( $fdir ne "" ) {
         $newpath = $newname;
     }
@@ -568,7 +569,7 @@ sub load_cache {
         $self->{db} = {};
     }
     foreach my $key ( keys %{ $self->{db} } ) {
-	next if $key eq 'session';
+        next if $key eq 'session';
         if (   not defined $self->{db}->{$key}->{fid}
             or not defined $self->{db}->{$key}->{anime_name_short} )
         {
@@ -613,7 +614,7 @@ sub login {
     my ($self) = @_;
     my $msg = "AUTH";
     my %parameters;
-     
+
     $parameters{user}      = $self->{username};
     $parameters{pass}      = $self->{password};
     $parameters{protover}  = 3;
@@ -625,8 +626,8 @@ sub login {
     if ( defined $msg
         && $msg =~ /20[0|1]\ ([a-zA-Z0-9]*)\ ([0-9\.\:]).*/ )
     {
-        $self->{skey}                = $1;
-        $self->{myaddr}              = $2;
+        $self->{skey}   = $1;
+        $self->{myaddr} = $2;
     }
     else {
         die "Login Failed: $msg\n";
@@ -658,7 +659,10 @@ sub ping {
 # Sends and reads the reply. Tries up to 5 times.
 sub _sendrecv {
     my ( $self, $command, $parameter_ref, $delay ) = @_;
-    if ( not defined $self->{skey} and $command ne "AUTH" and $command ne "PING" ) {
+    if (    not defined $self->{skey}
+        and $command ne "AUTH"
+        and $command ne "PING" )
+    {
         $self->login();
         $parameter_ref->{s} = $self->{skey};
     }
@@ -685,7 +689,7 @@ sub _sendrecv {
     debug "-->", $msg_str;
     my $recvmsg;
     my $timer = 0;
-  RETRY:
+
     while ( !( $recvmsg = $self->_recv() ) ) {
         if ( $timer > 10 ) {
             print "Timeout while wating for reply.\n";
@@ -701,7 +705,7 @@ sub _sendrecv {
         if ( $tag ne $1 ) {
             print
               "This is not the tag we are waiting for. Retrying ($tag!= $1)\n";
-            goto RETRY;
+            return $self->_sendrecv( $command, $parameter_ref, $delay );
         }
         $recvmsg =~ s/adbr-[\d]+\ //xmsi;
     }
