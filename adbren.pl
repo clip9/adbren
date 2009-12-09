@@ -24,6 +24,7 @@ use File::HomeDir;
 use Getopt::Long;
 use Storable;
 use Data::Dumper;
+use Carp;
 
 ### DEFAULTS ###
 
@@ -46,6 +47,7 @@ my $noskip        = 0;
 my $onlyhash      = 0;
 my $format_preset = 0;
 my $ping          = 0;
+my $state         = -1;
 my $logfile = File::Spec->catfile( File::HomeDir->my_data(), "adbren.log" );
 
 my $format = undef;
@@ -76,6 +78,7 @@ my $result = GetOptions(
     "noskip"    => \$noskip,
     "strict"    => \$strict,
     "ping"      => \$ping,
+    "state=s"   => \$state,
 );
 
 if ( not defined $format ) {
@@ -95,6 +98,16 @@ if ($ping) {
     exit(1);
 }
 
+if ( $state !~ m/[0-3]/ ) {
+    if    ( $state eq "unknown" ) { $state = "0"; }
+    elsif ( $state eq "hdd" )     { $state = "1"; }
+    elsif ( $state eq "cd" )      { $state = "2"; }
+    elsif ( $state eq "deleted" ) { $state = "3"; }
+    else {
+        croak "State " . $state . " is not supported.";
+    }
+}
+
 my @files;
 while ( ( my $file = shift ) ) {
     if ( -d $file ) {
@@ -109,7 +122,7 @@ while ( ( my $file = shift ) ) {
         push @files, $file;
     }
     else {
-        die "$file not found, bailing.\n";
+        croak "$file not found, bailing.\n";
     }
 }
 
@@ -178,8 +191,8 @@ foreach my $filepath (@files) {
         or not defined $fileinfo->{'anime_name_romaji'} )
     {
 
-        warn "Sanitycheck failed. Corrupt data from server?" if $retry <= 3;
-        die "Sanitycheck failed. Corrupt data from server?"  if $retry > 3;
+        carp "Sanitycheck failed. Corrupt data from server?" if $retry <= 3;
+        croak "Sanitycheck failed. Corrupt data from server?"  if $retry > 3;
         $retry++;
         sleep 5;
         goto RETRY;
@@ -254,7 +267,7 @@ foreach my $filepath (@files) {
         }
     }
     if ($mylist) {
-        $a->mylistadd( $fileinfo->{fid} );
+        $a->mylistadd( $fileinfo, $state );
     }
 }
 $a->logout();
@@ -271,6 +284,7 @@ Options:
            		(Don't remove special characters)
 	--norename	Do not rename files. Just print the new names.
 	--mylist	Add hashed files to mylist.
+	--state		Set anime state; can be: hdd, cd or deleted.
 	--onlyhash	Only print ed2k hashes. 
 	--nocorrupt	Don't rename "corrupt" files. (Files not found in AniDB)
 	--logfile	Log files renamed to this file. Default: ~\/adbren.log
@@ -335,6 +349,7 @@ use File::Spec;
 use File::HomeDir ();
 use Data::Dumper;
 use Storable;
+use Carp;
 
 my $default_delay = 30;
 
@@ -589,7 +604,7 @@ sub save_cache {
 }
 
 sub mylistadd {
-    my ( $self, $file ) = @_;
+    my ( $self, $file, $astate ) = @_;
     my %parameters;
     $parameters{s} = $self->{skey};
     if ( -e $file ) {
@@ -598,13 +613,17 @@ sub mylistadd {
         $parameters{size} = -s $file;
     }
     else {
-        $parameters{fid} = $file;
+        $parameters{fid} = $file->{fid};
+    }
+    if ( defined $astate and $astate > -1 ) {
+        $parameters{state} = $state;
     }
     my $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
     if ( $msg =~ /^2.*/ ) {
-        print $file. ": Added to mylist.\n";
+        print $file->{fid}. ": Added to mylist.\n";
     }
     else {
+        carp $msg;
         return undef;
     }
     return 1;
@@ -684,7 +703,7 @@ sub _sendrecv {
     $msg_str .= "\n";
 
     send( $self->{handle}, $msg_str, 0, $self->{sockaddr} )
-      or die( "Send: " . $! );
+      or croak( "Send: " . $! );
     $self->{last_command} = time;
     debug "-->", $msg_str;
     my $recvmsg;
@@ -692,18 +711,18 @@ sub _sendrecv {
 
     while ( !( $recvmsg = $self->_recv() ) ) {
         if ( $timer > 10 ) {
-            print "Timeout while wating for reply.\n";
+            carp "Timeout while wating for reply.\n";
             return undef;
         }
         $timer++;
 
         send( $self->{handle}, $msg_str, 0, $self->{sockaddr} )
-          or die( "Send: " . $! );
+          or croak( "Send: " . $! );
     }
     debug "<--", $recvmsg;
     if ( $recvmsg =~ m/(adbr-[\d]+)/xmsi ) {
         if ( $tag ne $1 ) {
-            print
+            carp
               "This is not the tag we are waiting for. Retrying ($tag!= $1)\n";
             return $self->_sendrecv( $command, $parameter_ref, $delay );
         }
@@ -717,9 +736,8 @@ sub _sendrecv {
         return $self->_sendrecv( $command, $parameter_ref, $delay );
     }
     if ( $recvmsg =~ /^555/ ) {
-        print
+        croak
 "Banned. You should wait a few hours before retrying! Message:\n$recvmsg";
-        exit;
     }
 
     return $recvmsg;
@@ -740,7 +758,7 @@ sub _recv {
     vec( $rin, fileno( $self->{handle} ), 1 ) = 1;
     if ( select( $rout = $rin, undef, undef, 10.0 ) ) {
         my $msg;
-        recv( $self->{handle}, $msg, 1500, 0 ) or die( "Recv:" . $! );
+        recv( $self->{handle}, $msg, 1500, 0 ) or craok( "Recv:" . $! );
         return $msg;
     }
     return undef;
