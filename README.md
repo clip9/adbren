@@ -9,7 +9,7 @@ adbren has a permanent home on github:
 
 # Install / Configuration
 Clone the git repository or download a copy, then execute the adbren.pl script. 
-It will ask you for your user name and password to [anidb](http://anidb.net/ "AniDB"]. 
+It will ask you for your user name and password to [anidb](http://anidb.net/ "AniDB"). 
 This configuration is stored in *~/.adbren.config*. Delete this file and 
 execute adbren.pl to rerun the configuration.
 
