@@ -633,7 +633,7 @@ sub mylistadd {
 	$parameters{viewed} = $aviewed;
     }
     my $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
-    if ( $msg =~ /^2.*/ ) {
+    if ( $msg =~ /^210/ ) {
         print $file->{fid}. ": Added to mylist.\n";
     }
     else {
