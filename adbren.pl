@@ -640,6 +640,7 @@ sub login {
     $parameters{client}    = $self->{client};
     $parameters{clientver} = $self->{clientver};
     $parameters{nat}       = 1;
+    $parameters{enc}       = 'UTF8';
     $msg = $self->_sendrecv( $msg, \%parameters, 0 );
 
     if ( defined $msg
