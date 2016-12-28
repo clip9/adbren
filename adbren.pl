@@ -299,7 +299,7 @@ Format vars:
 	\%audio_codec\%, \%audio_bitrate\%, \%video_codec\%, \%video_bitrate\%,
 	\%resolution\%, \%filetype\%, \%length\%, \%description\%, \%group\%, 
 	\%group_short\%, \%episode\%, \%episode_name\%, \%episode_name_romaji\%,
-	\%episode_name_kanii\%, \%episode_total\%, \%episode_last\%, \%anime_year\%,
+	\%episode_name_kanji\%, \%episode_total\%, \%episode_last\%, \%anime_year\%,
 	\%anime_type\%, \%anime_name_romaji\%, \%anime_name_kanji\%, 
 	\%anime_name_english\%, \%anime_name_other\%, \%anime_name_short\%, 
 	\%anime_synonyms\%, \%anime_category\%, \%version\%, \%censored\%,
@@ -359,7 +359,7 @@ use constant GROUP_NAME_SHORT    => 0x00000002;
 use constant EPISODE_NUMBER      => 0x00000100;
 use constant EPISODE_NAME        => 0x00000200;
 use constant EPISODE_NAME_ROMAJI => 0x00000400;
-use constant EPISODE_NAME_KANII  => 0x00000800;
+use constant EPISODE_NAME_KANJI  => 0x00000800;
 use constant EPISODE_TOTAL       => 0x00010000;
 use constant EPISODE_LAST        => 0x00020000;
 use constant ANIME_YEAR          => 0x00040000;
@@ -409,7 +409,7 @@ use constant STATUS_CEN    => 0x80;
 use constant FILE_ENUM => qw/fid aid eid gid lid status_code size ed2k md5 sha1
   crc32 lang_dub lang_sub quaility source audio_codec audio_bitrate video_codec
   video_bitrate resolution filetype length description group group_short
-  episode episode_name episode_name_romaji episode_name_kanii episode_total
+  episode episode_name episode_name_romaji episode_name_kanji episode_total
   episode_last anime_year anime_type anime_name_romaji anime_name_kanji
   anime_name_english anime_name_other anime_name_short anime_synonyms
   anime_category/;
@@ -520,7 +520,7 @@ sub file {
     # fields so the the ENUM might change.
     my $acode =
       GROUP_NAME | GROUP_NAME_SHORT | EPISODE_NUMBER | EPISODE_NAME |
-      EPISODE_NAME_ROMAJI | EPISODE_NAME_KANII | EPISODE_TOTAL | EPISODE_LAST |
+      EPISODE_NAME_ROMAJI | EPISODE_NAME_KANJI | EPISODE_TOTAL | EPISODE_LAST |
       ANIME_YEAR | ANIME_TYPE | ANIME_NAME_ROMAJI | ANIME_NAME_KANJI |
       ANIME_NAME_ENGLISH | ANIME_NAME_OTHER | ANIME_NAME_SHORT |
       ANIME_SYNONYMS | ANIME_CATAGORY;
