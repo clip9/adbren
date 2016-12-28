@@ -637,8 +637,34 @@ sub mylistadd {
         print $file->{fid}. ": Added to mylist.\n";
     }
     else {
-        carp $msg;
-        return undef;
+	if ( $msg =~ /^310/ ) {
+	    my $recvmsg = $msg;
+	    $msg =~ s/.*\n//im;
+	    my @f = split /\|/, $msg;
+	    if ( scalar @f > 0 ) {
+		$parameters{lid}  = $f[0];
+		$parameters{edit} = "1";
+		undef $parameters{ed2k};
+		undef $parameters{size};
+		undef $parameters{fid};
+		my $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
+		if ( $msg =~ /^311/ ) {
+		    print $file->{fid}. ": Edited mylist entry.\n";
+		}
+		else {
+		    carp $msg;
+		    return undef;
+		}
+	    }
+	    else {
+		carp $recvmsg;
+		return undef;
+	    }
+	}
+	else {
+	    carp $msg;
+	    return undef;
+	}
     }
     return 1;
 }
@@ -712,7 +738,9 @@ sub _sendrecv {
 
     my $msg_str = $command . " ";
     foreach my $k ( keys %{$parameter_ref} ) {
-        $msg_str .= $k . "=" . $parameter_ref->{$k} . "&";
+	if ( defined $parameter_ref->{$k} ) {
+	    $msg_str .= $k . "=" . $parameter_ref->{$k} . "&";
+	}
     }
     $msg_str =~ s/\&$//xmsi;
     $msg_str .= "\n";
