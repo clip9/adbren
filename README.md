@@ -38,7 +38,7 @@ execute adbren.pl to rerun the configuration.
         %audio_codec%, %audio_bitrate%, %video_codec%, %video_bitrate%,
         %resolution%, %filetype%, %length%, %description%, %group%, 
         %group_short%, %episode%, %episode_name%, %episode_name_romaji%,
-        %episode_name_kanii%, %episode_total%, %episode_last%, %anime_year%,
+        %episode_name_kanji%, %episode_total%, %episode_last%, %anime_year%,
         %anime_type%, %anime_name_romaji%, %anime_name_kanji%, 
         %anime_name_english%, %anime_name_other%, %anime_name_short%, 
         %anime_synonyms%, %anime_category%, %version%, %censored%,
