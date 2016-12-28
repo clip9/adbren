@@ -55,8 +55,9 @@ Directories on the command line are scanned recursively. Files are renamed in th
 
 # Tips & Tricks
 You can use an absolute or relative path in the format parameter like this:
+```shell
 	./adbren.pl --format /mnt/raid/%anime_name_english%/%episode%.%filetype%
 	./adbren.pl --format %anime_name_english%/%episode%.%filetype%
-
+```
 In the second example the target path is relative to the current 
 directory not the the directory where the file currently is.
