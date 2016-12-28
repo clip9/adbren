@@ -48,6 +48,7 @@ my $onlyhash      = 0;
 my $format_preset = 0;
 my $ping          = 0;
 my $state         = -1;
+my $viewed        = -1;
 my $logfile = File::Spec->catfile( File::HomeDir->my_data(), "adbren.log" );
 
 my $format = undef;
@@ -79,6 +80,7 @@ my $result = GetOptions(
     "strict"    => \$strict,
     "ping"      => \$ping,
     "state=s"   => \$state,
+    "viewed=s"  => \$viewed,
 );
 
 if ( not defined $format ) {
@@ -105,6 +107,14 @@ if ( $state !~ m/[0-3]/ ) {
     elsif ( $state eq "deleted" ) { $state = "3"; }
     else {
         croak "State " . $state . " is not supported.";
+    }
+}
+
+if ( $viewed !~ m/[0-1]/ ) {
+    if    ( $viewed eq "false" ){ $viewed = "0"; } 
+    elsif ( $viewed eq "true" ) { $viewed = "1"; } 
+    else {
+        croak "Viewed should be set to true or false.";
     }
 }
 
@@ -267,7 +277,7 @@ foreach my $filepath (@files) {
         }
     }
     if ($mylist) {
-        $a->mylistadd( $fileinfo, $state );
+        $a->mylistadd( $fileinfo, $state, $viewed );
     }
 }
 $a->logout();
@@ -285,6 +295,7 @@ Options:
 	--norename	Do not rename files. Just print the new names.
 	--mylist	Add hashed files to mylist.
 	--state		Set anime state; can be: hdd, cd or deleted.
+	--viewed	Set anime to viewed; can be: true or false.
 	--onlyhash	Only print ed2k hashes. 
 	--nocorrupt	Don't rename "corrupt" files. (Files not found in AniDB)
 	--logfile	Log files renamed to this file. Default: ~\/adbren.log
@@ -604,7 +615,7 @@ sub save_cache {
 }
 
 sub mylistadd {
-    my ( $self, $file, $astate ) = @_;
+    my ( $self, $file, $astate, $aviewed ) = @_;
     my %parameters;
     $parameters{s} = $self->{skey};
     if ( -e $file ) {
@@ -616,15 +627,44 @@ sub mylistadd {
         $parameters{fid} = $file->{fid};
     }
     if ( defined $astate and $astate > -1 ) {
-        $parameters{state} = $state;
+        $parameters{state} = $astate;
+    }
+    if ( defined $aviewed and $aviewed > -1 ) {
+	$parameters{viewed} = $aviewed;
     }
     my $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
-    if ( $msg =~ /^2.*/ ) {
+    if ( $msg =~ /^210/ ) {
         print $file->{fid}. ": Added to mylist.\n";
     }
     else {
-        carp $msg;
-        return undef;
+	if ( $msg =~ /^310/ ) {
+	    my $recvmsg = $msg;
+	    $msg =~ s/.*\n//im;
+	    my @f = split /\|/, $msg;
+	    if ( scalar @f > 0 ) {
+		$parameters{lid}  = $f[0];
+		$parameters{edit} = "1";
+		undef $parameters{ed2k};
+		undef $parameters{size};
+		undef $parameters{fid};
+		my $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
+		if ( $msg =~ /^311/ ) {
+		    print $file->{fid}. ": Edited mylist entry.\n";
+		}
+		else {
+		    carp $msg;
+		    return undef;
+		}
+	    }
+	    else {
+		carp $recvmsg;
+		return undef;
+	    }
+	}
+	else {
+	    carp $msg;
+	    return undef;
+	}
     }
     return 1;
 }
@@ -640,6 +680,7 @@ sub login {
     $parameters{client}    = $self->{client};
     $parameters{clientver} = $self->{clientver};
     $parameters{nat}       = 1;
+    $parameters{enc}       = 'UTF8';
     $msg = $self->_sendrecv( $msg, \%parameters, 0 );
 
     if ( defined $msg
@@ -697,7 +738,9 @@ sub _sendrecv {
 
     my $msg_str = $command . " ";
     foreach my $k ( keys %{$parameter_ref} ) {
-        $msg_str .= $k . "=" . $parameter_ref->{$k} . "&";
+	if ( defined $parameter_ref->{$k} ) {
+	    $msg_str .= $k . "=" . $parameter_ref->{$k} . "&";
+	}
     }
     $msg_str =~ s/\&$//xmsi;
     $msg_str .= "\n";
