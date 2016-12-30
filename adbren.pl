@@ -751,6 +751,7 @@ sub _sendrecv {
     debug "-->", $msg_str;
     my $recvmsg;
     my $timer = 0;
+    my $wait = 30;
 
     while ( !( $recvmsg = $self->_recv() ) ) {
         if ( $timer > 10 ) {
@@ -758,6 +759,9 @@ sub _sendrecv {
             return undef;
         }
         $timer++;
+        print "Retrying after ${wait}s\n";
+        sleep($wait);
+        $wait *= 2;
 
         send( $self->{handle}, $msg_str, 0, $self->{sockaddr} )
           or croak( "Send: " . $! );
