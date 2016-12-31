@@ -472,7 +472,15 @@ sub new {
       or die( "Gethostbyname(" . $self->{hostname} . "):" . $! );
     $self->{sockaddr} = sockaddr_in( $self->{port}, $self->{ipaddr} )
       or die($!);
-    $self->{last_command} = 0;
+    $self->{last_command_file} =
+      File::Spec->catfile( File::Spec->tmpdir(), "adbren_last_command.tmp" );
+    if ( -e $self->{last_command_file} ) {
+        my $last_command_ref = retrieve( $self->{last_command_file} );
+        $self->{last_command} = $$last_command_ref;
+    }
+    else {
+        $self->{last_command} = 0;
+    }
     defined $self->{username}  or die "Username not defined!\n";
     defined $self->{password}  or die "Password not defined!\n";
     defined $self->{client}    or die "Client not defined!\n";
@@ -730,10 +738,15 @@ sub _sendrecv {
     my $tag = "adbr-" . ( int( rand() * 10000 ) + 1 );
     $parameter_ref->{tag} = $tag;
     $delay = $default_delay if not defined $delay;
-    while ( defined $delay and int( time - $self->{last_command} ) < $delay ) {
-        $stat = $delay - ( time - $self->{last_command} );
-        sleep($stat);
+    my $elapsed = time - $self->{last_command};
+    while ( defined $delay and $elapsed < $delay ) {
+        $stat = $delay - $elapsed;
+        if ( $elapsed < 0 ) {
+            printf "Banned!!! Delay: %.2f minutes\n", $stat / 60;
+        }
         debug "Delay: $stat\n";
+        sleep($stat);
+        $elapsed = time - $self->{last_command};
     }
 
     my $msg_str = $command . " ";
@@ -748,6 +761,7 @@ sub _sendrecv {
     send( $self->{handle}, $msg_str, 0, $self->{sockaddr} )
       or croak( "Send: " . $! );
     $self->{last_command} = time;
+    store \$self->{last_command}, $self->{last_command_file};
     debug "-->", $msg_str;
     my $recvmsg;
     my $timer = 0;
@@ -783,8 +797,10 @@ sub _sendrecv {
         return $self->_sendrecv( $command, $parameter_ref, $delay );
     }
     if ( $recvmsg =~ /^555/ ) {
+        $self->{last_command} = time + (30 * 60);
+        store \$self->{last_command}, $self->{last_command_file};
         croak
-"Banned. You should wait a few hours before retrying! Message:\n$recvmsg";
+"Banned. You should wait 30 minutes before retrying! Message:\n$recvmsg";
     }
 
     return $recvmsg;
