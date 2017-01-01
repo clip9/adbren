@@ -525,6 +525,7 @@ sub file {
         print $file. ": Hashing\n";
         $parameters{ed2k} = ed2k_hash($file);
         $parameters{size} = -s $file;
+        $parameters{viewdate} = (stat($file))[9];
         if (    defined $self->{db}->{ $parameters{ed2k} }
             and defined $self->{db}->{ $parameters{ed2k} }->{fid} )
         {
