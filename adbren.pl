@@ -650,6 +650,20 @@ sub mylistadd {
             $msg =~ s/.*\n//im;
             my @f = split /\|/, $msg;
             if ( scalar @f > 0 ) {
+                if ( defined $parameters{state} and $parameters{state} eq $f[6] ) {
+                    if ( not defined $parameters{viewed} ) {
+                        print $file->{fid}. ": Already up-to-date mylist entry.\n";
+                        return undef;
+                    }
+
+                    if ( $f[7] gt 0 ) {
+                        $f[7] = 1
+                    }
+                    if ( $parameters{viewed} eq $f[7] ) {
+                        print $file->{fid}. ": Already up-to-date mylist entry.\n";
+                        return undef;
+                    }
+                }
                 $parameters{lid}  = $f[0];
                 $parameters{edit} = "1";
                 undef $parameters{ed2k};
