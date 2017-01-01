@@ -21,6 +21,7 @@ use File::Copy;
 use File::Path;
 use File::Find;
 use File::HomeDir;
+use File::Pid;
 use Getopt::Long;
 use Storable;
 use Data::Dumper;
@@ -150,13 +151,14 @@ if ($onlyhash) {
     exit;
 }
 
-my $sent_logout = 0;
 $SIG{'INT'} = 'CLEANUP';
 
+my $pidfile = File::Pid->new;
+my $pid = $pidfile->running;
+die "Client already running: $pid\n" if $pid;
+$pidfile->write;
+
 sub CLEANUP {
-    exit(1) if $sent_logout == 1;
-    $sent_logout = 1;
-    $a->logout();
     exit(1);
 }
 
@@ -280,7 +282,6 @@ foreach my $filepath (@files) {
         $a->mylistadd( $fileinfo, $state, $viewed );
     }
 }
-$a->logout();
 
 sub print_help {
     print <<EOF;
@@ -881,4 +882,13 @@ sub ed2k_hash {
     }
     $ctx2->add( $ctx->digest );
     return $ctx2->hexdigest;
+}
+
+END {
+    if ( defined $pidfile and defined $pidfile->running and $pidfile->running eq $$ ) {
+        $pidfile->remove or warn "Could not unlink pid file\n";
+    }
+    if ( defined $a ) {
+        $a->logout();
+    }
 }
