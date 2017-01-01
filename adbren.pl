@@ -21,6 +21,7 @@ use File::Copy;
 use File::Path;
 use File::Find;
 use File::HomeDir;
+use File::Pid;
 use Getopt::Long;
 use Storable;
 use Data::Dumper;
@@ -150,13 +151,14 @@ if ($onlyhash) {
     exit;
 }
 
-my $sent_logout = 0;
 $SIG{'INT'} = 'CLEANUP';
 
+my $pidfile = File::Pid->new;
+my $pid = $pidfile->running;
+die "Client already running: $pid\n" if $pid;
+$pidfile->write;
+
 sub CLEANUP {
-    exit(1) if $sent_logout == 1;
-    $sent_logout = 1;
-    $a->logout();
     exit(1);
 }
 
@@ -280,7 +282,6 @@ foreach my $filepath (@files) {
         $a->mylistadd( $fileinfo, $state, $viewed );
     }
 }
-$a->logout();
 
 sub print_help {
     print <<EOF;
@@ -361,6 +362,7 @@ use File::HomeDir ();
 use Data::Dumper;
 use Storable;
 use Carp;
+use IO::Uncompress::Inflate qw(inflate $InflateError);
 
 my $default_delay = 30;
 
@@ -472,7 +474,15 @@ sub new {
       or die( "Gethostbyname(" . $self->{hostname} . "):" . $! );
     $self->{sockaddr} = sockaddr_in( $self->{port}, $self->{ipaddr} )
       or die($!);
-    $self->{last_command} = 0;
+    $self->{last_command_file} =
+      File::Spec->catfile( File::Spec->tmpdir(), "adbren_last_command.tmp" );
+    if ( -e $self->{last_command_file} ) {
+        my $last_command_ref = retrieve( $self->{last_command_file} );
+        $self->{last_command} = $$last_command_ref;
+    }
+    else {
+        $self->{last_command} = 0;
+    }
     defined $self->{username}  or die "Username not defined!\n";
     defined $self->{password}  or die "Password not defined!\n";
     defined $self->{client}    or die "Client not defined!\n";
@@ -517,6 +527,7 @@ sub file {
         print $file. ": Hashing\n";
         $parameters{ed2k} = ed2k_hash($file);
         $parameters{size} = -s $file;
+        $parameters{viewdate} = (stat($file))[9];
         if (    defined $self->{db}->{ $parameters{ed2k} }
             and defined $self->{db}->{ $parameters{ed2k} }->{fid} )
         {
@@ -630,41 +641,55 @@ sub mylistadd {
         $parameters{state} = $astate;
     }
     if ( defined $aviewed and $aviewed > -1 ) {
-	$parameters{viewed} = $aviewed;
+        $parameters{viewed} = $aviewed;
     }
     my $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
     if ( $msg =~ /^210/ ) {
         print $file->{fid}. ": Added to mylist.\n";
     }
     else {
-	if ( $msg =~ /^310/ ) {
-	    my $recvmsg = $msg;
-	    $msg =~ s/.*\n//im;
-	    my @f = split /\|/, $msg;
-	    if ( scalar @f > 0 ) {
-		$parameters{lid}  = $f[0];
-		$parameters{edit} = "1";
-		undef $parameters{ed2k};
-		undef $parameters{size};
-		undef $parameters{fid};
-		my $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
-		if ( $msg =~ /^311/ ) {
-		    print $file->{fid}. ": Edited mylist entry.\n";
-		}
-		else {
-		    carp $msg;
-		    return undef;
-		}
-	    }
-	    else {
-		carp $recvmsg;
-		return undef;
-	    }
-	}
-	else {
-	    carp $msg;
-	    return undef;
-	}
+        if ( $msg =~ /^310/ ) {
+            my $recvmsg = $msg;
+            $msg =~ s/.*\n//im;
+            my @f = split /\|/, $msg;
+            if ( scalar @f > 0 ) {
+                if ( defined $parameters{state} and $parameters{state} eq $f[6] ) {
+                    if ( not defined $parameters{viewed} ) {
+                        print $file->{fid}. ": Already up-to-date mylist entry.\n";
+                        return undef;
+                    }
+
+                    if ( $f[7] gt 0 ) {
+                        $f[7] = 1
+                    }
+                    if ( $parameters{viewed} eq $f[7] ) {
+                        print $file->{fid}. ": Already up-to-date mylist entry.\n";
+                        return undef;
+                    }
+                }
+                $parameters{lid}  = $f[0];
+                $parameters{edit} = "1";
+                undef $parameters{ed2k};
+                undef $parameters{size};
+                undef $parameters{fid};
+                my $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
+                if ( $msg =~ /^311/ ) {
+                    print $file->{fid}. ": Edited mylist entry.\n";
+                }
+                else {
+                    carp $msg;
+                    return undef;
+                }
+            }
+            else {
+                carp $recvmsg;
+                return undef;
+            }
+        }
+        else {
+            carp $msg;
+            return undef;
+        }
     }
     return 1;
 }
@@ -681,6 +706,7 @@ sub login {
     $parameters{clientver} = $self->{clientver};
     $parameters{nat}       = 1;
     $parameters{enc}       = 'UTF8';
+    $parameters{comp}      = 1;
     $msg = $self->_sendrecv( $msg, \%parameters, 0 );
 
     if ( defined $msg
@@ -730,17 +756,22 @@ sub _sendrecv {
     my $tag = "adbr-" . ( int( rand() * 10000 ) + 1 );
     $parameter_ref->{tag} = $tag;
     $delay = $default_delay if not defined $delay;
-    while ( defined $delay and int( time - $self->{last_command} ) < $delay ) {
-        $stat = $delay - ( time - $self->{last_command} );
-        sleep($stat);
+    my $elapsed = time - $self->{last_command};
+    while ( defined $delay and $elapsed < $delay ) {
+        $stat = $delay - $elapsed;
+        if ( $elapsed < 0 ) {
+            printf "Banned!!! Delay: %.2f minutes\n", $stat / 60;
+        }
         debug "Delay: $stat\n";
+        sleep($stat);
+        $elapsed = time - $self->{last_command};
     }
 
     my $msg_str = $command . " ";
     foreach my $k ( keys %{$parameter_ref} ) {
-	if ( defined $parameter_ref->{$k} ) {
-	    $msg_str .= $k . "=" . $parameter_ref->{$k} . "&";
-	}
+        if ( defined $parameter_ref->{$k} ) {
+            $msg_str .= $k . "=" . $parameter_ref->{$k} . "&";
+        }
     }
     $msg_str =~ s/\&$//xmsi;
     $msg_str .= "\n";
@@ -748,9 +779,11 @@ sub _sendrecv {
     send( $self->{handle}, $msg_str, 0, $self->{sockaddr} )
       or croak( "Send: " . $! );
     $self->{last_command} = time;
+    store \$self->{last_command}, $self->{last_command_file};
     debug "-->", $msg_str;
     my $recvmsg;
     my $timer = 0;
+    my $wait = 30;
 
     while ( !( $recvmsg = $self->_recv() ) ) {
         if ( $timer > 10 ) {
@@ -758,6 +791,9 @@ sub _sendrecv {
             return undef;
         }
         $timer++;
+        print "Retrying after ${wait}s\n";
+        sleep($wait);
+        $wait *= 2;
 
         send( $self->{handle}, $msg_str, 0, $self->{sockaddr} )
           or croak( "Send: " . $! );
@@ -779,8 +815,10 @@ sub _sendrecv {
         return $self->_sendrecv( $command, $parameter_ref, $delay );
     }
     if ( $recvmsg =~ /^555/ ) {
+        $self->{last_command} = time + (30 * 60);
+        store \$self->{last_command}, $self->{last_command_file};
         croak
-"Banned. You should wait a few hours before retrying! Message:\n$recvmsg";
+"Banned. You should wait 30 minutes before retrying! Message:\n$recvmsg";
     }
 
     return $recvmsg;
@@ -802,6 +840,13 @@ sub _recv {
     if ( select( $rout = $rin, undef, undef, 10.0 ) ) {
         my $msg;
         recv( $self->{handle}, $msg, 1500, 0 ) or craok( "Recv:" . $! );
+        my $fff = File::Spec->catfile( File::Spec->tmpdir(), "adbren.test" );
+        store \$msg, $fff;
+        if ( substr($msg, 0, 2) eq "\x00\x00" ) {
+            my $data = substr( $msg, 2 );
+            inflate( \$data, \$msg )
+              or die 'Error inflating response: ' . $InflateError;
+        }
         return $msg;
     }
     return undef;
@@ -846,4 +891,13 @@ sub ed2k_hash {
     }
     $ctx2->add( $ctx->digest );
     return $ctx2->hexdigest;
+}
+
+END {
+    if ( defined $pidfile and defined $pidfile->running and $pidfile->running eq $$ ) {
+        $pidfile->remove or warn "Could not unlink pid file\n";
+    }
+    if ( defined $a ) {
+        $a->logout();
+    }
 }
