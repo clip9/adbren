@@ -362,6 +362,7 @@ use File::HomeDir ();
 use Data::Dumper;
 use Storable;
 use Carp;
+use IO::Uncompress::Inflate qw(inflate $InflateError);
 
 my $default_delay = 30;
 
@@ -705,6 +706,7 @@ sub login {
     $parameters{clientver} = $self->{clientver};
     $parameters{nat}       = 1;
     $parameters{enc}       = 'UTF8';
+    $parameters{comp}      = 1;
     $msg = $self->_sendrecv( $msg, \%parameters, 0 );
 
     if ( defined $msg
@@ -838,6 +840,13 @@ sub _recv {
     if ( select( $rout = $rin, undef, undef, 10.0 ) ) {
         my $msg;
         recv( $self->{handle}, $msg, 1500, 0 ) or craok( "Recv:" . $! );
+        my $fff = File::Spec->catfile( File::Spec->tmpdir(), "adbren.test" );
+        store \$msg, $fff;
+        if ( substr($msg, 0, 2) eq "\x00\x00" ) {
+            my $data = substr( $msg, 2 );
+            inflate( \$data, \$msg )
+              or die 'Error inflating response: ' . $InflateError;
+        }
         return $msg;
     }
     return undef;
