@@ -840,8 +840,6 @@ sub _recv {
     if ( select( $rout = $rin, undef, undef, 10.0 ) ) {
         my $msg;
         recv( $self->{handle}, $msg, 1500, 0 ) or craok( "Recv:" . $! );
-        my $fff = File::Spec->catfile( File::Spec->tmpdir(), "adbren.test" );
-        store \$msg, $fff;
         if ( substr($msg, 0, 2) eq "\x00\x00" ) {
             my $data = substr( $msg, 2 );
             inflate( \$data, \$msg )
