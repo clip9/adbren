@@ -50,12 +50,17 @@ my $format_preset = 0;
 my $ping          = 0;
 my $state         = -1;
 my $viewed        = -1;
-my $logfile = File::Spec->catfile( File::HomeDir->my_data(), "adbren.log" );
+my $rootpath = File::HomeDir->my_data() . "/adbren";
+my $logfile = File::Spec->catfile( $rootpath, "adbren.log" );
 
 my $format = undef;
 
 my $config_file =
-  File::Spec->catfile( File::HomeDir->my_data(), ".adbren.config" );
+  File::Spec->catfile( $rootpath, "adbren.config" );
+
+if ( not -e $rootpath ) {
+    mkdir $rootpath;
+}
 
 if ( not -f $config_file ) {
     configure($config_file);
@@ -463,8 +468,8 @@ sub new {
         *debug = sub { };
     }
 
-    $self->{dbpath}     = File::HomeDir->my_data() . "/.adbren.db";
-    $self->{dbpath_tmp} = File::HomeDir->my_data() . "/.adbren.db.tmp";
+    $self->{dbpath}     = $rootpath . "/adbren.db";
+    $self->{dbpath_tmp} = $rootpath . "/adbren.db.tmp";
     $self->load_cache();
     $self->{delay}    = 0;
     $self->{hostname} = "api.anidb.info";
