@@ -23,7 +23,7 @@ use File::Find;
 use File::HomeDir;
 use File::Pid;
 use Getopt::Long;
-use Storable;
+use Storable qw(nstore retrieve);
 use Data::Dumper;
 use Carp;
 
@@ -349,7 +349,7 @@ sub configure {
     print "Type your AniDB password followed by return:\n";
     $hash{password} = <STDIN>;
     chomp( $hash{password} );
-    store \%hash, $config_file
+    nstore \%hash, $config_file
       or die "There was a problem storing the configuration: $!";
     print
 "Your adbren configuration is now stored in: $config_file. You can delete this file to rerun this configuration.\n";
@@ -365,7 +365,7 @@ use Digest::MD4;
 use File::Spec;
 use File::HomeDir ();
 use Data::Dumper;
-use Storable;
+use Storable qw(nstore retrieve);
 use Carp;
 use IO::Uncompress::Inflate qw(inflate $InflateError);
 
@@ -626,7 +626,7 @@ sub load_cache {
 sub save_cache {
     my ($self) = @_;
     debug "Saving Cache.";
-    store $self->{db}, $self->{dbpath_tmp} or die $!;
+    nstore $self->{db}, $self->{dbpath_tmp} or die $!;
     rename $self->{dbpath_tmp}, $self->{dbpath} or die $!;
 }
 
@@ -784,7 +784,7 @@ sub _sendrecv {
     send( $self->{handle}, $msg_str, 0, $self->{sockaddr} )
       or croak( "Send: " . $! );
     $self->{last_command} = time;
-    store \$self->{last_command}, $self->{last_command_file};
+    nstore \$self->{last_command}, $self->{last_command_file};
     debug "-->", $msg_str;
     my $recvmsg;
     my $timer = 0;
@@ -821,7 +821,7 @@ sub _sendrecv {
     }
     if ( $recvmsg =~ /^555/ ) {
         $self->{last_command} = time + (30 * 60);
-        store \$self->{last_command}, $self->{last_command_file};
+        nstore \$self->{last_command}, $self->{last_command_file};
         croak
 "Banned. You should wait 30 minutes before retrying! Message:\n$recvmsg";
     }
