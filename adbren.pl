@@ -50,6 +50,7 @@ my $format_preset = 0;
 my $ping          = 0;
 my $state         = -1;
 my $viewed        = -1;
+my $storage       = undef;
 my $rootpath = File::HomeDir->my_data() . "/adbren";
 my $logfile = File::Spec->catfile( $rootpath, "adbren.log" );
 
@@ -87,6 +88,7 @@ my $result = GetOptions(
     "ping"      => \$ping,
     "state=s"   => \$state,
     "viewed=s"  => \$viewed,
+    "storage=s" => \$storage,
 );
 
 if ( not defined $format ) {
@@ -284,7 +286,7 @@ foreach my $filepath (@files) {
         }
     }
     if ($mylist) {
-        $a->mylistadd( $fileinfo, $state, $viewed );
+        $a->mylistadd( $fileinfo, $state, $viewed, $storage );
     }
 }
 
@@ -302,6 +304,7 @@ Options:
 	--mylist	Add hashed files to mylist.
 	--state		Set anime state; can be: hdd, cd or deleted.
 	--viewed	Set anime to viewed; can be: true or false.
+	--storage	Set storage name (free text).
 	--onlyhash	Only print ed2k hashes. 
 	--nocorrupt	Don't rename "corrupt" files. (Files not found in AniDB)
 	--logfile	Log files renamed to this file. Default: ~\/adbren.log
@@ -634,7 +637,7 @@ sub save_cache {
 }
 
 sub mylistadd {
-    my ( $self, $file, $astate, $aviewed ) = @_;
+    my ( $self, $file, $astate, $aviewed, $astorage ) = @_;
     my %parameters;
     $parameters{s} = $self->{skey};
     if ( -e $file ) {
@@ -651,6 +654,9 @@ sub mylistadd {
     if ( defined $aviewed and $aviewed > -1 ) {
         $parameters{viewed} = $aviewed;
     }
+    if ( defined $astorage ) {
+        $parameters{storage} = $storage;
+    }
     my $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
     if ( $msg =~ /^210/ ) {
         print $file->{fid}. ": Added to mylist.\n";
@@ -661,7 +667,8 @@ sub mylistadd {
         @res{ MYLIST_ENUM() } = split /\|/, $msg;
         if ( defined $parameters{state} && $parameters{state} ne $res{state} ||
             $aviewed == 0 && $res{viewdate} ne "" ||
-            $aviewed == 1 && $res{viewdate} eq "") {
+            $aviewed == 1 && $res{viewdate} eq "" ||
+            defined $parameters{storage} && $parameters{storage} ne $res{storage}) {
             $parameters{lid}  = $res{lid};
             $parameters{edit} = "1";
             delete $parameters{ed2k};
