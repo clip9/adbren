@@ -436,6 +436,9 @@ use constant ANIME_ENUM => qw/aid episodes episode_count special rating
   votes tmprating tmpvotes review_rating reviews year type romaji kanji
   english other short_name synonyms category/;
 
+use constant MYLIST_ENUM => qw/lid fid eid aid gid date state viewdate storage
+  source other filestate/;
+
 use subs 'debug';
 
 sub new {
@@ -652,49 +655,35 @@ sub mylistadd {
     if ( $msg =~ /^210/ ) {
         print $file->{fid}. ": Added to mylist.\n";
     }
-    else {
-        if ( $msg =~ /^310/ ) {
-            my $recvmsg = $msg;
-            $msg =~ s/.*\n//im;
-            my @f = split /\|/, $msg;
-            if ( scalar @f > 0 ) {
-                if ( defined $parameters{state} and $parameters{state} eq $f[6] ) {
-                    if ( not defined $parameters{viewed} ) {
-                        print $file->{fid}. ": Already up-to-date mylist entry.\n";
-                        return undef;
-                    }
-
-                    if ( $f[7] gt 0 ) {
-                        $f[7] = 1
-                    }
-                    if ( $parameters{viewed} eq $f[7] ) {
-                        print $file->{fid}. ": Already up-to-date mylist entry.\n";
-                        return undef;
-                    }
-                }
-                $parameters{lid}  = $f[0];
-                $parameters{edit} = "1";
-                undef $parameters{ed2k};
-                undef $parameters{size};
-                undef $parameters{fid};
-                my $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
-                if ( $msg =~ /^311/ ) {
-                    print $file->{fid}. ": Edited mylist entry.\n";
-                }
-                else {
-                    carp $msg;
-                    return undef;
-                }
+    elsif ( $msg =~ /^310/ ) {
+        $msg =~ s/.*\n//;
+        my %res;
+        @res{ MYLIST_ENUM() } = split /\|/, $msg;
+        if ( defined $parameters{state} && $parameters{state} ne $res{state} ||
+            $aviewed == 0 && $res{viewdate} ne "" ||
+            $aviewed == 1 && $res{viewdate} eq "") {
+            $parameters{lid}  = $res{lid};
+            $parameters{edit} = "1";
+            delete $parameters{ed2k};
+            delete $parameters{size};
+            delete $parameters{fid};
+            $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
+            if ( $msg =~ /^311/ ) {
+                print $file->{fid}. ": Edited mylist entry.\n";
             }
             else {
-                carp $recvmsg;
+                carp $msg;
                 return undef;
             }
         }
         else {
-            carp $msg;
-            return undef;
+            print $file->{fid}. ": Already up-to-date mylist entry.\n";
+            return 1;
         }
+    }
+    else {
+        carp $msg;
+        return undef;
     }
     return 1;
 }
