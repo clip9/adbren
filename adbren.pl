@@ -649,8 +649,15 @@ sub mylistadd {
         $parameters{viewed} = $aviewed;
     }
     my $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
+    if ( $msg =~ /^310.*/ ) { # File already in mylist
+        $parameters{edit} = 1;
+        $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
+    }
     if ( $msg =~ /^210/ ) {
         print $file->{fid}. ": Added to mylist.\n";
+    }
+    elsif ( $msg =~ /^311.*/ ) { # Updated.
+        print $file->{fid}. ": mylist entry updated.\n";
     }
     else {
         if ( $msg =~ /^310/ ) {
