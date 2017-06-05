@@ -50,6 +50,7 @@ my $format_preset = 0;
 my $ping          = 0;
 my $state         = -1;
 my $viewed        = -1;
+my $storage       = undef;
 my $rootpath = File::HomeDir->my_data() . "/adbren";
 my $logfile = File::Spec->catfile( $rootpath, "adbren.log" );
 
@@ -87,6 +88,7 @@ my $result = GetOptions(
     "ping"      => \$ping,
     "state=s"   => \$state,
     "viewed=s"  => \$viewed,
+    "storage=s" => \$storage,
 );
 
 if ( not defined $format ) {
@@ -284,7 +286,7 @@ foreach my $filepath (@files) {
         }
     }
     if ($mylist) {
-        $a->mylistadd( $fileinfo, $state, $viewed );
+        $a->mylistadd( $fileinfo, $state, $viewed, $storage );
     }
 }
 
@@ -302,6 +304,7 @@ Options:
 	--mylist	Add hashed files to mylist.
 	--state		Set anime state; can be: hdd, cd or deleted.
 	--viewed	Set anime to viewed; can be: true or false.
+	--storage	Set storage name (free text).
 	--onlyhash	Only print ed2k hashes. 
 	--nocorrupt	Don't rename "corrupt" files. (Files not found in AniDB)
 	--logfile	Log files renamed to this file. Default: ~\/adbren.log
@@ -435,6 +438,9 @@ use constant FILE_ENUM => qw/fid aid eid gid lid status_code size ed2k md5 sha1
 use constant ANIME_ENUM => qw/aid episodes episode_count special rating
   votes tmprating tmpvotes review_rating reviews year type romaji kanji
   english other short_name synonyms category/;
+
+use constant MYLIST_ENUM => qw/lid fid eid aid gid date state viewdate storage
+  source other filestate/;
 
 use subs 'debug';
 
@@ -631,7 +637,7 @@ sub save_cache {
 }
 
 sub mylistadd {
-    my ( $self, $file, $astate, $aviewed ) = @_;
+    my ( $self, $file, $astate, $aviewed, $astorage ) = @_;
     my %parameters;
     $parameters{s} = $self->{skey};
     if ( -e $file ) {
@@ -648,53 +654,43 @@ sub mylistadd {
     if ( defined $aviewed and $aviewed > -1 ) {
         $parameters{viewed} = $aviewed;
     }
+    if ( defined $astorage ) {
+        $parameters{storage} = $storage;
+    }
     my $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
     if ( $msg =~ /^210/ ) {
         print $file->{fid}. ": Added to mylist.\n";
     }
-    else {
-        if ( $msg =~ /^310/ ) {
-            my $recvmsg = $msg;
-            $msg =~ s/.*\n//im;
-            my @f = split /\|/, $msg;
-            if ( scalar @f > 0 ) {
-                if ( defined $parameters{state} and $parameters{state} eq $f[6] ) {
-                    if ( not defined $parameters{viewed} ) {
-                        print $file->{fid}. ": Already up-to-date mylist entry.\n";
-                        return undef;
-                    }
-
-                    if ( $f[7] gt 0 ) {
-                        $f[7] = 1
-                    }
-                    if ( $parameters{viewed} eq $f[7] ) {
-                        print $file->{fid}. ": Already up-to-date mylist entry.\n";
-                        return undef;
-                    }
-                }
-                $parameters{lid}  = $f[0];
-                $parameters{edit} = "1";
-                undef $parameters{ed2k};
-                undef $parameters{size};
-                undef $parameters{fid};
-                my $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
-                if ( $msg =~ /^311/ ) {
-                    print $file->{fid}. ": Edited mylist entry.\n";
-                }
-                else {
-                    carp $msg;
-                    return undef;
-                }
+    elsif ( $msg =~ /^310/ ) {
+        $msg =~ s/.*\n//;
+        my %res;
+        @res{ MYLIST_ENUM() } = split /\|/, $msg;
+        if ( defined $parameters{state} && $parameters{state} ne $res{state} ||
+            $aviewed == 0 && $res{viewdate} ne "" ||
+            $aviewed == 1 && $res{viewdate} eq "" ||
+            defined $parameters{storage} && $parameters{storage} ne $res{storage}) {
+            $parameters{lid}  = $res{lid};
+            $parameters{edit} = "1";
+            delete $parameters{ed2k};
+            delete $parameters{size};
+            delete $parameters{fid};
+            $msg = $self->_sendrecv( "MYLISTADD", \%parameters, 1 );
+            if ( $msg =~ /^311/ ) {
+                print $file->{fid}. ": Edited mylist entry.\n";
             }
             else {
-                carp $recvmsg;
+                carp $msg;
                 return undef;
             }
         }
         else {
-            carp $msg;
-            return undef;
+            print $file->{fid}. ": Already up-to-date mylist entry.\n";
+            return 1;
         }
+    }
+    else {
+        carp $msg;
+        return undef;
     }
     return 1;
 }
