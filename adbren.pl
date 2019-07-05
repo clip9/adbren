@@ -184,7 +184,7 @@ foreach my $filepath (@files) {
         open my $log, "<", $logfile;
         $/ = 1;
         my @raw_data = <$log>;
-        my @matches = grep { $_ eq $filename } @raw_data;
+        my @matches = grep { /$filename/ } @raw_data;
         if ( scalar @matches > 0 ) {
             print "Skipped: $filename\n";
             next;
