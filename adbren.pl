@@ -56,7 +56,7 @@ my $logfile = File::Spec->catfile( $rootpath, "adbren.log" );
 
 my $format = undef;
 
-my $config_file =
+my $config_file = $ENV{"ADBREN_CONFIG"} ||
   File::Spec->catfile( $rootpath, "adbren.config" );
 
 if ( not -e $rootpath ) {
